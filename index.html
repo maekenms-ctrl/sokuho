@@ -604,6 +604,7 @@ function benchOf(g,S){const used=new Set();S.hist.forEach(h=>h.forEach(p=>used.a
   return team.players.filter(p=>!used.has(p.id)).sort((a,b)=>(+a.num||999)-(+b.num||999))}
 function pickList(players,act,extra=''){return players.length?`<div class="pick">${players.map(p=>`<button data-act="${act}" data-v="${p.id}" ${extra}><span class="no num">${esc(p.num)}</span>${esc(p.name)}</button>`).join('')}</div>`:'<p class="muted small">控えの選手がいません。名簿に追加してください。</p>'}
 function renderSheet(g,S){
+  if(sheet.type==='login')return loginSheet();
   let body='';
   if(!g||!S){sheet=null;return''}
   if(sheet.type==='runner'){
@@ -677,7 +678,10 @@ document.addEventListener('click',ev=>{
     case'view':viewId=v;tab='live';render();window.scrollTo(0,0);break;
     case'dodelgame':{const id=sheet&&sheet.gid;sheet=null;if(!id)break;delete games[id];if(viewId===id)viewId=null;
       db.doc('games/'+id).delete().catch(writeErr);if(currentId===id)db.doc('meta/current').delete().catch(()=>{});render();toast('試合を削除しました');break}
-    case'login':login();break;
+    case'login':sheet={type:'login',mode:'in'};render();setTimeout(()=>document.getElementById('lg_email')?.focus(),50);break;
+    case'lgmode':sheet.mode=v;render();break;
+    case'resend':auth.currentUser&&auth.currentUser.sendEmailVerification().then(()=>toast('確認メールを送りました')).catch(e=>toast(e.code==='auth/too-many-requests'?'しばらく待ってからもう一度お試しください':'送れませんでした'));break;
+    case'checkverify':checkVerify();break;
     case'savenote':saveNote(v);break;
     case'logout':auth.signOut();scorer=true;toast('ログアウトしました');break;
     case'delrole':db.doc('roles/'+v).delete().then(()=>toast('入力の許可を取り消しました')).catch(writeErr);break;
@@ -727,6 +731,7 @@ document.addEventListener('submit',ev=>{
     if(ruleEdit&&ruleEdit!=='new'){const r=team.rules.find(x=>x.id===ruleEdit);if(r)Object.assign(r,{title:t,body:bd,src,at:Date.now()})}
     else team.rules.push({id:uid(),title:t,body:bd,src,at:Date.now()});
     ruleEdit=null;saveTeam();toast('ルールメモを保存しました');render()}
+  if(f==='login'){doLogin();return}
   if(f==='addrole'){const el=document.getElementById('ad_email');const em=el.value.trim().toLowerCase();
     if(!/^[^\s@\/]+@[^\s@\/]+\.[^\s@\/]+$/.test(em)){toast('メールアドレスを確認してください');return}
     const nm=document.getElementById('ad_name').value.trim();
@@ -855,9 +860,10 @@ function renderFoot(){
   let acct;
   if(!me)acct=`<div class="row"><span class="muted" style="flex:1">記録係の方はログインすると入力できます。</span><button class="btn ghost" data-act="login">記録係ログイン</button></div>`;
   else{
-    const lab={owner:'管理者',scorer:'記録係',pending:'入力の許可がありません',viewer:''}[role];
+    const lab=me.unverified?'メールアドレスの確認待ち':{owner:'管理者',scorer:'記録係',pending:'入力の許可がありません',viewer:''}[role];
     acct=`<div class="row"><span style="flex:1;min-width:0;overflow-wrap:anywhere">${esc(me.email)}<br><span class="muted">${lab}</span></span><button class="btn ghost" data-act="logout">ログアウト</button></div>`+
-      (role==='pending'?`<p class="muted" style="margin:0">管理者にこのメールアドレスを伝えて、入力の許可をもらってください。許可されると自動で入力できるようになります。</p>`:'');
+      (me.unverified?`<p style="margin:0">登録したメールアドレスに確認メールを送りました。メールのリンクを押したあと、下の「確認しました」を押してください。迷惑メールフォルダも確認してください。</p><div class="row"><button class="btn" data-act="checkverify">確認しました</button><button class="btn ghost" data-act="resend">確認メールを再送</button></div>`:
+      role==='pending'?`<p class="muted" style="margin:0">管理者にこのメールアドレスを伝えて、入力の許可をもらってください。許可されると自動で入力できるようになります。</p>`:'');
   }
   return `<div class="card pad foot">${acct}
   <details><summary>ホーム画面に追加する方法</summary>
@@ -868,22 +874,50 @@ function renderFoot(){
 function renderAdmin(){
   const rows=roles.filter(r=>r.role!=='owner').sort((a,b)=>(a.addedAt||0)-(b.addedAt||0));
   return `<div class="card pad"><h2>速報を入力できる人</h2>
-    <p class="small muted" style="margin:0 0 10px">ここに登録したGoogleアカウント（Gmail）でログインした人だけが、速報を入力できます。保護者はログイン不要で閲覧できます。</p>
-    <form class="form" data-form="addrole"><div class="row"><label class="f">Gmailアドレス<input id="ad_email" type="email" inputmode="email" autocomplete="off" placeholder="example@gmail.com" data-keep="no"></label><label class="f">メモ（名前など）<input id="ad_name" placeholder="例：佐藤さん（副代表）" data-keep="no"></label></div>
+    <p class="small muted" style="margin:0 0 10px">ここに登録したメールアドレスでログインした人だけが、速報を入力できます。保護者はログイン不要で閲覧できます。</p>
+    <form class="form" data-form="addrole"><div class="row"><label class="f">メールアドレス<input id="ad_email" type="email" inputmode="email" autocomplete="off" placeholder="example@gmail.com" data-keep="no"></label><label class="f">メモ（名前など）<input id="ad_name" placeholder="例：佐藤さん（副代表）" data-keep="no"></label></div>
     <button class="btn" type="submit">入力を許可する</button></form></div>
     <div class="card pad"><h2>許可している人 ${rows.length?`（${rows.length}人）`:''}</h2>${rows.length?`<ul class="roster">${rows.map(r=>`<li><span class="nm"><b>${esc(r.name||'')}</b>${r.name?'<br>':''}<span class="small" style="overflow-wrap:anywhere">${esc(r.email)}</span></span><button class="x" data-act="delrole" data-v="${esc(r.email)}">許可を取り消す</button></li>`).join('')}</ul>`:'<p class="muted small">まだ誰も登録されていません。あなた（管理者）は登録しなくても入力できます。</p>'}</div>`;
 }
-async function login(){
-  const prov=new firebase.auth.GoogleAuthProvider();prov.setCustomParameters({prompt:'select_account'});
-  try{await auth.signInWithPopup(prov)}
-  catch(e){
-    if(e&&['auth/popup-blocked','auth/operation-not-supported-in-this-environment','auth/web-storage-unsupported'].includes(e.code)){try{await auth.signInWithRedirect(prov)}catch(e2){toast('ログインできませんでした。Safari・Chromeで開いて試してください')}}
-    else if(e&&e.code!=='auth/popup-closed-by-user'&&e.code!=='auth/cancelled-popup-request')toast('ログインできませんでした（'+(e.code||'エラー')+'）');
-  }
+function loginSheet(){
+  const m=sheet.mode;
+  const title={in:'記録係ログイン',up:'はじめての方（パスワード作成）',reset:'パスワードの再設定'}[m];
+  const btn={in:'ログイン',up:'登録して確認メールを送る',reset:'再設定メールを送る'}[m];
+  const note={in:'管理者に許可されたメールアドレスとパスワードでログインします。',up:'管理者に伝えたメールアドレスで、パスワード（6文字以上）を決めてください。確認メールが届きます。',reset:'登録したメールアドレスに、パスワード再設定のメールを送ります。'}[m];
+  return `<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true">
+    <h3>${title}</h3><p class="small muted" style="margin:0">${note}</p>
+    <form class="form" data-form="login">
+      <label class="f">メールアドレス<input id="lg_email" type="email" inputmode="email" autocomplete="username" autocapitalize="off" data-keep="no"></label>
+      ${m!=='reset'?`<label class="f">パスワード<input id="lg_pw" type="password" autocomplete="${m==='up'?'new-password':'current-password'}" minlength="6" data-keep="no"></label>`:''}
+      <button class="btn" type="submit">${btn}</button></form>
+    <div class="row" style="justify-content:space-between">
+      ${m!=='in'?`<button class="x" data-act="lgmode" data-v="in">ログインに戻る</button>`:`<button class="x" data-act="lgmode" data-v="up">はじめての方はこちら</button><button class="x" data-act="lgmode" data-v="reset">パスワードを忘れた</button>`}</div>
+    <button class="btn ghost" data-act="close">閉じる</button></div></div>`;
+}
+function authMsg(e){
+  const c=e&&e.code||'';
+  return {'auth/invalid-email':'メールアドレスの形が正しくありません','auth/missing-password':'パスワードを入力してください','auth/weak-password':'パスワードは6文字以上にしてください',
+    'auth/email-already-in-use':'このメールアドレスは登録済みです。ログインしてください','auth/invalid-credential':'メールアドレスかパスワードが違います',
+    'auth/wrong-password':'メールアドレスかパスワードが違います','auth/user-not-found':'メールアドレスかパスワードが違います','auth/too-many-requests':'しばらく待ってからもう一度お試しください',
+    'auth/operation-not-allowed':'ログイン方法が有効になっていません（管理者がFirebaseで「メール/パスワード」を有効にしてください）','auth/network-request-failed':'通信できませんでした。電波を確認してください'}[c]||('ログインできませんでした（'+c+'）');
+}
+async function doLogin(){
+  const em=document.getElementById('lg_email').value.trim().toLowerCase();const pwEl=document.getElementById('lg_pw');const pw=pwEl?pwEl.value:'';
+  const m=sheet.mode;
+  try{
+    if(m==='reset'){await auth.sendPasswordResetEmail(em);toast('再設定メールを送りました');sheet={type:'login',mode:'in'};render();return}
+    if(m==='up'){const cred=await auth.createUserWithEmailAndPassword(em,pw);await cred.user.sendEmailVerification();sheet=null;toast('確認メールを送りました');render();return}
+    await auth.signInWithEmailAndPassword(em,pw);sheet=null;toast('ログインしました');render();
+  }catch(e){toast(authMsg(e))}
+}
+async function checkVerify(){
+  const u=auth.currentUser;if(!u)return;
+  try{await u.reload();if(auth.currentUser.emailVerified){await auth.currentUser.getIdToken(true);toast('確認できました');resolveRole(auth.currentUser)}else toast('まだ確認されていません。メールのリンクを押してください')}catch(e){toast('確認できませんでした')}
 }
 async function resolveRole(user){
   if(unsubRoles){unsubRoles();unsubRoles=null;roles=[]}
   if(!user||!user.email){me=null;role='viewer';if(tab==='admin')tab='live';render();return}
+  if(!user.emailVerified){me={email:user.email.toLowerCase(),unverified:true};role='pending';render();return}
   me={email:user.email.toLowerCase()};role='pending';render();
   const ref=db.doc('roles/'+me.email);
   try{
@@ -910,7 +944,6 @@ render();
   try{db.settings({ignoreUndefinedProperties:true,merge:true})}catch(e){}
   db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
   auth=firebase.auth();
-  auth.getRedirectResult().catch(e=>{if(e&&e.code)toast('ログインできませんでした（'+e.code+'）')});
   auth.onAuthStateChanged(resolveRole);
   const done=()=>{if(loaded.team&&loaded.games&&!booted){booted=true;if(!viewId)viewId=currentId&&games[currentId]?currentId:null}render()};
   db.doc('team/main').onSnapshot(s=>{if(s.exists){const d=s.data();team={name:d.name||'',players:(d.players||[]).map(p=>({...p})),rules:(d.rules||[]).map(r=>({...r}))}}loaded.team=true;done()},e=>{loaded.team=true;done()});
