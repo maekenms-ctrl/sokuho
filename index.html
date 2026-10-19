@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>HYOGO HARIMA 速報</title>
+<title>兵庫播磨速報</title>
 <meta name="theme-color" content="#13284B">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="速報">
+<meta name="apple-mobile-web-app-title" content="兵庫播磨速報">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png?v=2">
 <link rel="apple-touch-icon" href="apple-touch-icon.png?v=2">
@@ -228,6 +228,10 @@ mark{background:var(--note-line);color:var(--ink);border-radius:3px;padding:0 2p
 .fpad button{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 0;display:flex;flex-direction:column;align-items:center;line-height:1.1;min-height:48px}
 .fpad b{font-family:var(--f-num);font-size:20px}
 .fpad small{font-size:10px;color:var(--muted)}
+.pstat{display:flex;flex-direction:column;gap:6px;background:var(--soft);border-radius:10px;padding:10px 12px}
+.pstat>div:first-child{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.pstat .ps{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
+.pstat .ps b{font-size:22px;color:var(--ink);margin-right:2px}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -392,9 +396,13 @@ function replay(g){
       if(e.side==='us'){
         const old=S.usP;S.usP=e.pid;pit('u:'+e.pid);
         const at=S.lineup.findIndex(x=>x.pid===e.pid);
-        if(at>=0){if(S.lineup[at].pos!=='投'){S.lineup[at].pos='投';const h=S.hist[at];h[h.length-1].trail.push('投')}}
+        let extra='';
+        if(at>=0){const from=S.lineup[at].pos;if(from!=='投'){
+            const ps=S.lineup.findIndex((x,i)=>i!==at&&x.pos==='投');
+            S.lineup[at].pos='投';S.hist[at][S.hist[at].length-1].trail.push('投');
+            if(ps>=0){S.lineup[ps].pos=from;S.hist[ps][S.hist[ps].length-1].trail.push(from);extra=`（${pname(S.lineup[ps].pid)}は${from}へ）`}}}
         else{const ps=S.lineup.findIndex(x=>x.pos==='投');if(ps>=0){S.lineup[ps]={pid:e.pid,pos:'投'};S.hist[ps].push({pid:e.pid,trail:['投'],kind:'守備'})}}
-        log({kind:'sub',text:`投手交代　${pname(old)} → ${pname(e.pid)}`,score:[tot(0),tot(1)]});
+        log({kind:'sub',text:`投手交代　${pname(old)} → ${pname(e.pid)}${extra}`,score:[tot(0),tot(1)]});
       }else{
         const old=S.oppP;S.oppP=e.name;pit('o:'+e.name);
         log({kind:'sub',text:`相手投手交代　${old} → ${e.name}`,score:[tot(0),tot(1)]});
@@ -529,7 +537,7 @@ function renderLive(g,S){
       <div class="bso"><b style="color:var(--lamp-b)">B</b><div class="lamps">${lamps(S.b,3,'b')}</div><b style="color:var(--lamp-s)">S</b><div class="lamps">${lamps(S.s,2,'s')}</div><b style="color:var(--lamp-o)">O</b><div class="lamps">${lamps(S.outs,2,'o')}</div></div></div>
       ${diamond(S,editing())}</div>
       <div class="mu"><div><div class="k">打者</div><div class="v">${bName}</div><div class="d">${bLine}</div></div>
-      <div><div class="k">投手</div><div class="v">${esc(pName)}</div><div class="np">${P.np}<span>球</span></div></div></div>
+      <div><div class="k" style="display:flex;justify-content:space-between;align-items:center">投手${editing()?`<button class="x" data-act="open" data-v="${pk.startsWith('u:')?'pitcher':'opppitcher'}" style="padding:0;color:var(--accent);font-weight:700">交代 ›</button>`:''}</div><div class="v">${esc(pName)}</div><div class="np">${P.np}<span>球</span></div></div></div>
       ${S.seq.length?`<div class="seq" style="margin-top:10px">${S.seq.map((k,i)=>editing()?`<button class="pc ${k} fixp" data-act="fix" data-v="${S.seqIdx[i]}" aria-label="${i+1}球目を訂正">${i+1}</button>`:`<span class="pc ${k}">${i+1}</span>`).join('')}${editing()?'<span class="small muted" style="margin-left:4px">丸をタップで訂正</span>':''}</div>`:''}
     </div>`;
   }
@@ -649,8 +657,9 @@ function renderRoster(){
       <div class="row"><label class="f" style="flex:0 1 90px;min-width:80px"><span class="ulab"><img class="uimg" src="uni1.png" alt="">1st</span><input id="pe_n1" inputmode="numeric" value="${esc(p.num||'')}" data-keep="no"></label>
       <label class="f" style="flex:0 1 90px;min-width:80px"><span class="ulab"><img class="uimg" src="uni2.png" alt="">2nd</span><input id="pe_n2" inputmode="numeric" value="${esc(p.num2||'')}" data-keep="no"></label>
       <label class="f">名前<input id="pe_name" value="${esc(p.name)}" data-keep="no"></label></div>
+      <label class="switch"><input type="checkbox" id="pe_pit" ${p.pit?'checked':''}> 投手（投手交代の候補の一番上に出す）</label>
       <div class="row"><button class="btn" type="submit">保存</button><button class="btn ghost" type="button" data-act="cancelp">やめる</button><button class="btn ghost" type="button" data-act="delp" data-v="${p.id}" style="margin-left:auto;color:var(--danger)">削除</button></div></form></li>`
-    :`<li><img class="uimg" src="uni1.png" alt="1st"><span class="uni"><span class="ul">1st</span><b>${esc(p.num||'-')}</b></span><img class="uimg" src="uni2.png" alt="2nd"><span class="uni two"><span class="ul">2nd</span><b>${esc(p.num2||'-')}</b></span><span class="nm">${esc(p.name)}</span>${can?`<button class="x" data-act="editp" data-v="${p.id}">変更</button>`:''}</li>`;
+    :`<li><img class="uimg" src="uni1.png" alt="1st"><span class="uni"><span class="ul">1st</span><b>${esc(p.num||'-')}</b></span><img class="uimg" src="uni2.png" alt="2nd"><span class="uni two"><span class="ul">2nd</span><b>${esc(p.num2||'-')}</b></span><span class="nm">${esc(p.name)}${p.pit?' <span class="pen" style="margin-left:4px">投</span>':''}</span>${can?`<button class="x" data-act="editp" data-v="${p.id}">変更</button>`:''}</li>`;
   const list=sorted.length?`<ul class="roster">${sorted.map(row).join('')}</ul>`:'<p class="muted small">まだ選手が登録されていません。</p>';
   const addCard=can?`<div class="card pad"><h2>選手を追加</h2>
     <form class="form" data-form="addplayer">
@@ -659,6 +668,7 @@ function renderRoster(){
         <label class="f n"><span class="ulab"><img class="uimg" src="uni2.png" alt="">2nd</span><small>セカンド</small><input id="ap_n2" inputmode="numeric" pattern="[0-9]*" maxlength="3" placeholder="22" data-keep="no"></label>
         <label class="f nm">名前<small>&nbsp;</small><input id="ap_nm" placeholder="山田 太郎" data-keep="no"></label>
       </div>
+      <label class="switch"><input type="checkbox" id="ap_pit"> 投手</label>
       <button class="btn" type="submit">＋ 名簿に追加</button>
       <p class="small muted" style="margin:0">2ndが1stと同じ番号なら、2ndは空けたままで大丈夫です。追加すると次の選手をすぐ入力できます。</p>
     </form></div>`:'';
@@ -755,13 +765,26 @@ function renderSheet(g,S){
     else inner=`<p class="small muted" style="margin:0">打順を変えずに守備位置だけを変えます。</p><div class="form">${S.lineup.map((x,i)=>`<div class="row"><span style="flex:1;font-weight:700">${i+1}番 ${esc(S.pname(x.pid))}</span><div class="dirs">${POS.map(p=>`<button class="chip" aria-pressed="${x.pos===p}" data-act="dopos" data-slot="${i}" data-v="${p}">${p}</button>`).join('')}</div></div>`).join('')}</div>`;
     body=`<h3>選手交代</h3><div class="seg">${seg}</div>${inner}`;
   }else if(sheet.type==='pitcher'){
-    const inLineup=S.lineup.filter(x=>x.pid!==S.usP).map(x=>team.players.find(p=>p.id===x.pid)).filter(Boolean);
-    body=`<h3>投手交代　${esc(S.pname(S.usP))}（${(S.pit['u:'+S.usP]||{}).np||0}球）から</h3>
-    <div class="lbl">控えから</div>${pickList(benchOf(g,S),'dopitch')}
-    <div class="lbl">出場中の選手から（守備位置を投手に変更）</div>${pickList(inLineup,'dopitch')}`;
+    const P=S.pit['u:'+S.usP]||{np:0,outs:0,H:0,K:0,BB:0,HBP:0,R:0,bf:0};
+    const dh=!S.lineup.some(x=>x.pos==='投');
+    const bench=benchOf(g,S);const pits=bench.filter(p=>p.pit),others=bench.filter(p=>!p.pit);
+    const inL=dh?[]:S.lineup.map((x,i)=>({x,i})).filter(o=>o.x.pid!==S.usP).map(o=>({p:team.players.find(t=>t.id===o.x.pid),pos:o.x.pos})).filter(o=>o.p);
+    const btn=(p,sub)=>`<button data-act="dopitch" data-v="${p.id}"><span class="no num">${esc(numFor(p,g))}</span><span>${esc(p.name)}${sub?`<br><small class="muted" style="font-weight:500">${sub}</small>`:''}</span></button>`;
+    body=`<h3>投手交代</h3>
+    <div class="pstat"><div><b>${esc(S.pname(S.usP))}</b><span class="small muted">いまの投手</span></div>
+      <div class="ps"><span><b class="num">${P.np}</b>球</span><span><b class="num">${ipStr(P.outs)}</b>回</span><span><b class="num">${P.H}</b>安</span><span><b class="num">${P.K}</b>振</span><span><b class="num">${P.BB+P.HBP}</b>四死</span><span><b class="num">${P.R}</b>失</span></div></div>
+    ${pits.length?`<div class="lbl" style="margin:0">投手（名簿で「投手」に印を付けた控え）</div><div class="pick">${pits.map(p=>btn(p)).join('')}</div>`:''}
+    <div class="lbl" style="margin:0">${pits.length?'その他の控え':'控えから'}</div>${others.length?`<div class="pick">${others.map(p=>btn(p)).join('')}</div>`:'<p class="small muted" style="margin:0">ほかの控えはいません。</p>'}
+    ${inL.length?`<div class="lbl" style="margin:0">出場中の選手から（守備位置を入れ替え）</div><div class="pick">${inL.map(o=>btn(o.p,`${o.pos}→投、${esc(S.pname(S.usP))}は${o.pos}へ`)).join('')}</div>`:''}
+    ${pits.length?'':'<p class="small muted" style="margin:0">名簿の「変更」で投手に印を付けると、ここの一番上に並びます。</p>'}`;
   }else if(sheet.type==='opppitcher'){
     const n=S.pitOrder.filter(k=>k.startsWith('o:')).length+1;
-    body=`<h3>相手の投手交代</h3><form class="form" data-form="opppitch"><label class="f">新しい投手（名前か背番号）<input id="op_name" value="${n}番手" data-keep="no"></label><button class="btn" type="submit">交代を記録</button></form>`;
+    const P=S.pit[S.pitKey&&S.pitKey.startsWith('o:')?S.pitKey:'o:'+S.oppP]||{np:0,outs:0,H:0,K:0,BB:0,HBP:0,R:0};
+    body=`<h3>相手の投手交代</h3>
+    <div class="pstat"><div><b>${esc(S.oppP)}</b><span class="small muted">いまの投手</span></div>
+      <div class="ps"><span><b class="num">${P.np}</b>球</span><span><b class="num">${ipStr(P.outs)}</b>回</span><span><b class="num">${P.H}</b>安</span><span><b class="num">${P.R}</b>失</span></div></div>
+    <button class="btn" data-act="opqp" data-v="${n}番手">${n}番手の投手に交代（1タップ）</button>
+    <form class="form" data-form="opppitch"><label class="f">背番号や名前がわかれば入力（任意）<input id="op_name" placeholder="例：18 / 山本" data-keep="no"></label><button class="btn ghost" type="submit">この名前で交代</button></form>`;
   }else if(sheet.type==='delgame'){
     const gm=games[sheet.gid];
     body=`<h3>この試合を削除しますか？</h3><p class="muted" style="margin:0">${gm?esc(gdate(gm))+' '+esc(gm.opponent)+' 戦の':''}記録がすべて消え、元に戻せません。</p><div class="row"><button class="btn danger" data-act="dodelgame">削除する</button><button class="btn ghost" data-act="close">やめる</button></div>`;
@@ -814,7 +837,8 @@ document.addEventListener('click',ev=>{
       const S=replay(g);const pos=kind==='守備'?document.getElementById('sb_pos').value:kind==='代打'?S.lineup[slot].pos:S.lineup[slot].pos;
       addPlayer(g,v);push({t:'sub',slot,pid:v,pos,kind});sheet=null;render();toast(`${kind}を記録しました`);break}
     case'dopos':push({t:'pos',slot:+el.dataset.slot,pos:v});break;
-    case'dopitch':addPlayer(g,v);push({t:'pitcher',side:'us',pid:v});sheet=null;render();toast('投手交代を記録しました');break;
+    case'dopitch':{addPlayer(g,v);push({t:'pitcher',side:'us',pid:v});sheet=null;render();const gid=g.id;toastUndo('投手交代を記録しました',()=>{const g2=games[gid];if(g2&&g2.events.length&&g2.events.at(-1).t==='pitcher'){g2.events.pop();g2.updatedAt=Date.now();saveGame(gid);render()}});break}
+    case'opqp':{push({t:'pitcher',side:'opp',name:v});sheet=null;render();const gid=g.id;toastUndo(`相手の投手を${v}に交代しました`,()=>{const g2=games[gid];if(g2&&g2.events.length&&g2.events.at(-1).t==='pitcher'){g2.events.pop();g2.updatedAt=Date.now();saveGame(gid);render()}});break}
     case'doend':push({t:'end'});sheet=null;render();break;
     case'view':viewId=v;tab='live';render();window.scrollTo(0,0);break;
     case'dodelgame':{const id=sheet&&sheet.gid;sheet=null;if(!id)break;delete games[id];if(viewId===id)viewId=null;
@@ -856,7 +880,7 @@ document.addEventListener('submit',ev=>{
     const nm=document.getElementById('ap_nm').value.trim();
     if(!nm){toast('名前を入力してください');document.getElementById('ap_nm').focus();return}
     if(n1&&team.players.some(p=>p.num===n1)){toast(`1stの${n1}番はすでに登録されています`);return}
-    team.players.push({id:uid(),num:n1,num2:n2||n1,name:nm});saveTeam();toast(`${nm}（1st ${n1||'-'}／2nd ${n2||n1||'-'}）を追加しました`);
+    team.players.push({id:uid(),num:n1,num2:n2||n1,name:nm,pit:document.getElementById('ap_pit').checked});saveTeam();toast(`${nm}（1st ${n1||'-'}／2nd ${n2||n1||'-'}）を追加しました`);
     render();document.getElementById('ap_n1')?.focus();
   }
   if(f==='bulk'){
@@ -899,13 +923,13 @@ document.addEventListener('submit',ev=>{
   if(f==='player'){const pl=team.players.find(x=>x.id===playerEdit);if(!pl)return;
     const n1=document.getElementById('pe_n1').value.trim(),n2=document.getElementById('pe_n2').value.trim(),nm=document.getElementById('pe_name').value.trim();
     if(!nm){toast('名前を入力してください');return}
-    Object.assign(pl,{num:n1,num2:n2||n1,name:nm});playerEdit=null;saveTeam();syncGameNums(pl);toast('選手情報を変更しました');render();return}
+    Object.assign(pl,{num:n1,num2:n2||n1,name:nm,pit:document.getElementById('pe_pit').checked});playerEdit=null;saveTeam();syncGameNums(pl);toast('選手情報を変更しました');render();return}
   if(f==='addrole'){const el=document.getElementById('ad_email');const em=el.value.trim().toLowerCase();
     if(!/^[^\s@\/]+@[^\s@\/]+\.[^\s@\/]+$/.test(em)){toast('メールアドレスを確認してください');return}
     const nm=document.getElementById('ad_name').value.trim();
     db.doc('roles/'+em).set({role:'scorer',email:em,name:nm,addedAt:Date.now()}).then(()=>{toast(`${em} に入力を許可しました`)}).catch(writeErr);
     el.value='';document.getElementById('ad_name').value='';}
-  if(f==='opppitch'){const n=document.getElementById('op_name').value.trim();if(!n)return;push({t:'pitcher',side:'opp',name:n});sheet=null;render();toast('相手の投手交代を記録しました')}
+  if(f==='opppitch'){const raw=document.getElementById('op_name').value.trim();if(!raw){toast('背番号か名前を入力してください');return}const n=/^\d+$/.test(raw)?`#${raw}`:raw;push({t:'pitcher',side:'opp',name:n});sheet=null;render();toast('相手の投手交代を記録しました')}
 });
 
 /* ---------- rules ---------- */
