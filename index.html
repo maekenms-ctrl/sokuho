@@ -231,6 +231,7 @@ mark{background:var(--note-line);color:var(--ink);border-radius:3px;padding:0 2p
 <script>
 const POS=['投','捕','一','二','三','遊','左','中','右','指'];
 const FIELD={投:'ピッチャー',捕:'キャッチャー',一:'ファースト',二:'セカンド',三:'サード',遊:'ショート',左:'レフト',中:'センター',右:'ライト'};
+const ZONE={三遊:'三遊間',二遊:'二遊間',左中:'左中間',右中:'右中間',返し:'センター返し'};
 const BASEN=['一塁','二塁','三塁'];
 const RES=[
  ['1B','安打','hit'],['2B','二塁打','hit'],['3B','三塁打','hit'],['HR','本塁打','hit'],
@@ -244,6 +245,7 @@ let pendingWrites=false,offline=false,roles=[],unsubRoles=null;
 let team={name:'',players:[],rules:[]};
 let ruleQ='';let ruleEdit=null;let playerEdit=null;
 const UNI={1:'ファースト',2:'セカンド'};
+function gdate(g){if(!g||!g.date)return '';const [y,m,d]=g.date.split('-').map(Number);const w='日月火水木金土'[new Date(y,m-1,d).getDay()];return `${m}月${d}日(${w})${g.time?' '+g.time+' 開始':''}`}
 function numFor(p,g){return g&&g.uniform==='2'?(p.num2||p.num||''):(p.num||'')}
 let games={};let currentId=null;let viewId=null;
 let tab='live';let sheet=null;let dirSel=null;
@@ -345,10 +347,15 @@ function replay(g){
       let text='';
       if(e.to==='out'){S.bases[e.base]=null;text=`${BASEN[e.base]}走者 ${rname(r)} ${e.why==='PO'?'牽制死':e.why==='CS'?'盗塁死':'走塁死'}`;log({kind:'run',text,runs:0,score:before});addOut(1);continue}
       if(e.why==='SB'&&r.us)bat(r.pid).SB++;
-      if(e.to==='home'){S.bases[e.base]=null;scoreRun(r,rbi)}else moveUp(e.base,rbi);
-      const why={SB:'盗塁成功',WP:'暴投・捕逸で進塁',adv:'進塁'}[e.why]||'進塁';
+      const tgt=e.to==='home'?3:e.to==='next'?e.base+1:+e.to;
+      if(tgt>=3){S.bases[e.base]=null;scoreRun(r,rbi)}
+      else if(tgt>e.base){for(let k=e.base;k<tgt;k++)moveUp(k,rbi)}
+      else if(tgt<e.base){if(S.bases[tgt])continue;S.bases[tgt]=r;S.bases[e.base]=null}
+      else continue;
+      const why={SB:'盗塁',WP:'暴投・捕逸',E:'エラー',adv:'進塁'}[e.why]||'進塁';
       const scored=tot(0)+tot(1)-before[0]-before[1];
-      text=e.to==='home'?`${BASEN[e.base]}走者 ${rname(r)} 生還`:`${BASEN[e.base]}走者 ${rname(r)} ${why}`;
+      const where=tgt>=3?'生還':tgt<e.base?`${BASEN[tgt]}へ戻る`:`${BASEN[tgt]}へ`;
+      text=`${BASEN[e.base]}走者 ${rname(r)} ${e.why==='adv'||tgt<e.base?'':why+'で'}${where}`;
       log({kind:'run',text,runs:scored,score:[tot(0),tot(1)]});
     }
     else if(e.t==='sub'){
@@ -381,19 +388,22 @@ function replay(g){
   return S;
 }
 function resText(code,dir,kind){
-  const f=dir?FIELD[dir]:'';
+  const z=dir&&ZONE[dir];const f=dir?(FIELD[dir]||ZONE[dir]||''):'';
+  const to=dir==='返し'?'の':'への';
   switch(code){
-    case'1B':return f?`${f}へのヒット`:'ヒット';
-    case'2B':return f?`${f}へのツーベース`:'ツーベースヒット';
-    case'3B':return f?`${f}へのスリーベース`:'スリーベースヒット';
-    case'HR':return f?`${f}へのホームラン`:'ホームラン';
+    case'1B':return f?`${f}${to}ヒット`:'ヒット';
+    case'2B':return f?`${f}${to}ツーベース`:'ツーベースヒット';
+    case'3B':return f?`${f}${to}スリーベース`:'スリーベースヒット';
+    case'HR':return f?`${f}${to}ホームラン`:'ホームラン';
     case'BB':return'フォアボール';case'HBP':return'デッドボール';
     case'K':return kind||'三振';
-    case'GO':return f?`${f}ゴロ`:'ゴロ';case'FO':return f?`${f}フライ`:'フライ';case'LO':return f?`${f}ライナー`:'ライナー';
-    case'DP':return f?`${f}ゴロ併殺`:'ダブルプレー';
+    case'GO':return f?(z?`${f}${to}ゴロ`:`${f}ゴロ`):'ゴロ';
+    case'FO':return f?(z?`${f}${to}フライ`:`${f}フライ`):'フライ';
+    case'LO':return f?(z?`${f}${to}ライナー`:`${f}ライナー`):'ライナー';
+    case'DP':return f?(z?`${f}${to}ゴロで併殺`:`${f}ゴロ併殺`):'ダブルプレー';
     case'SAC':return f?`送りバント（${f}）`:'送りバント';
-    case'SF':return f?`${f}への犠牲フライ`:'犠牲フライ';
-    case'E':return f?`${f}のエラーで出塁`:'エラーで出塁';
+    case'SF':return f?`${f}${to}犠牲フライ`:'犠牲フライ';
+    case'E':return f?(z?`エラーで出塁（${f}）`:`${f}のエラーで出塁`):'エラーで出塁';
     case'FC':return f?`フィールダースチョイス（${f}）`:'フィールダースチョイス';
   }return code;
 }
@@ -420,15 +430,15 @@ function render(){
   const keep=[...document.querySelectorAll('input[id],textarea[id],select[id]')].reduce((o,el)=>(o[el.id]=el.value,o),{});
   const g=cur();const S=g?replay(g):null;
   app.innerHTML=renderTop(g,S)+`<main><div class="wrap">${renderBody(g,S)}</div></main>`+(sheet?renderSheet(g,S):'');
-  for(const id in keep){const el=document.getElementById(id);if(!el||el.dataset.keep==='no')continue;if(el.dataset.draft==='1'?el.value!==keep[id]:(el.value===''&&keep[id]))el.value=keep[id]}
-  dhToggle();
+  for(const id in keep){const el=document.getElementById(id);if(!el||el.dataset.keep==='no')continue;if(el.value!==keep[id]&&(el.dataset.draft==='1'||el.tagName==='SELECT'||el.type==='date'||el.type==='time'||(el.value===''&&keep[id])))el.value=keep[id]}
+  dhToggle();uniLabels();
 }
 function renderTop(g,S){
   let head='',ls='';
   if(g){
     const [t,b]=teamNames(g);const n=Math.max(g.innings,S.score[0].length);
     const st=!g.events||!g.events.length?'試合前':S.ended?'試合終了':'試合中';
-    head=`<div class="gamehead"><div style="min-width:0"><h1>${esc(g.usName)} vs ${esc(g.opponent)}</h1><div class="sub">${esc(g.date)}${g.venue?' ・ '+esc(g.venue):''}</div></div><span class="status ${st==='試合中'?'live':st==='試合終了'?'done':''}">${st}</span></div>`;
+    head=`<div class="gamehead"><div style="min-width:0"><h1>${esc(g.usName)} vs ${esc(g.opponent)}</h1><div class="sub">${esc(gdate(g))}${g.venue?' ・ '+esc(g.venue):''}</div></div><span class="status ${st==='試合中'?'live':st==='試合終了'?'done':''}">${st}</span></div>`;
     let hd='<tr><th class="tn"></th>';for(let i=1;i<=n;i++)hd+=`<th>${i}</th>`;hd+='<th>計</th><th>安</th></tr>';
     const rows=[0,1].map(h=>{let r=`<tr><td class="tn">${esc([t,b][h])}</td>`;
       for(let i=0;i<n;i++){let v=S.score[h][i];let txt=v==null?'':v;
@@ -528,6 +538,7 @@ function inputPanel(g,S){
     <div class="cnt"><button class="big B" data-act="p" data-v="B">ボール</button><button class="big S" data-act="p" data-v="S">見逃し</button><button class="big W" data-act="p" data-v="W">空振り</button><button class="big F" data-act="p" data-v="F">ファウル</button></div>
     <div class="lbl">打球方向（任意・先に選ぶ）</div>
     <div class="dirs">${Object.keys(FIELD).map(d=>`<button class="chip" aria-pressed="${dirSel===d}" data-act="dir" data-v="${d}">${d}</button>`).join('')}</div>
+    <div class="dirs">${Object.keys(ZONE).map(d=>`<button class="chip" aria-pressed="${dirSel===d}" data-act="dir" data-v="${d}">${ZONE[d]}</button>`).join('')}</div>
     <div class="lbl">打席結果</div>
     <div class="res">${RES.map(([c,l,k])=>`<button class="rb ${k||''}" data-act="pa" data-v="${c}">${l}</button>`).join('')}</div>
     <div class="acts">
@@ -584,7 +595,7 @@ function renderGames(){
   const list=Object.values(games).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
   const items=list.map(gm=>{const S=replay(gm);const [t,b]=teamNames(gm);
     const st=!gm.events||!gm.events.length?'試合前':S.ended?'終了':'試合中';
-    return `<li><button data-act="view" data-v="${gm.id}"><div style="min-width:0"><div style="font-weight:700">${esc(gm.usName)} vs ${esc(gm.opponent)}${gm.id===currentId?' <span class="small" style="color:var(--accent)">● 速報中</span>':''}</div><div class="small muted">${esc(gm.date)} ・ ${st}</div></div><span class="sc">${S.tot[0]}-${S.tot[1]}</span></button>${isOwner()&&scorer?`<div style="text-align:right"><button class="x" data-act="open" data-v="delgame" data-g="${gm.id}">この試合を削除</button></div>`:''}</li>`}).join('');
+    return `<li><button data-act="view" data-v="${gm.id}"><div style="min-width:0"><div style="font-weight:700">${esc(gm.usName)} vs ${esc(gm.opponent)}${gm.id===currentId?' <span class="small" style="color:var(--accent)">● 速報中</span>':''}</div><div class="small muted">${esc(gdate(gm))} ・ ${st}</div></div><span class="sc">${S.tot[0]}-${S.tot[1]}</span></button>${isOwner()&&scorer?`<div style="text-align:right"><button class="x" data-act="open" data-v="delgame" data-g="${gm.id}">この試合を削除</button></div>`:''}</li>`}).join('');
   const form=editing()?newGameForm():'';
   return form+`<div class="card pad"><h2>試合一覧</h2>${list.length?`<ul class="glist">${items}</ul>`:'<p class="muted small">まだ試合がありません。</p>'}</div>`;
 }
@@ -592,12 +603,13 @@ function newGameForm(){
   if(!team.players.length)return `<div class="card pad"><h2>新しい試合</h2><p class="muted">先に「名簿」で選手を登録してください。</p><button class="btn" data-act="tab" data-v="roster">名簿を登録する</button></div>`;
   const today=new Date();const ds=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
   const sorted=team.players.slice().sort((a,b)=>(+a.num||999)-(+b.num||999));
-  const opts=sel=>`<option value="">選手を選ぶ</option>`+sorted.map(p=>`<option value="${p.id}">${esc(p.num||'-')}/${esc(p.num2||p.num||'-')} ${esc(p.name)}</option>`).join('');
+  const opts=sel=>`<option value="">選手を選ぶ</option>`+sorted.map(p=>`<option value="${p.id}" data-n1="${esc(p.num||'-')}" data-n2="${esc(p.num2||p.num||'-')}" data-nm="${esc(p.name)}">${esc(p.num||'-')} ${esc(p.name)}</option>`).join('');
   const defPos=['中','二','遊','一','三','左','右','捕','投'];
   let lu='';for(let i=0;i<9;i++)lu+=`<span class="n">${i+1}</span><select id="lu${i}">${opts()}</select><select id="lp${i}">${POS.map(p=>`<option ${p===defPos[i]?'selected':''}>${p}</option>`).join('')}</select>`;
   return `<details class="card pad" ${Object.keys(games).length?'':'open'}><summary style="font-weight:700;cursor:pointer">＋ 新しい試合を作る</summary>
   <form class="form" data-form="newgame" style="margin-top:12px">
-    <div class="row"><label class="f">相手チーム<input id="ng_opp" required placeholder="例：○○ボーイズ"></label><label class="f">日付<input id="ng_date" type="date" value="${ds}"></label></div>
+    <div class="row"><label class="f">相手チーム<input id="ng_opp" required placeholder="例：○○ボーイズ"></label></div>
+    <div class="row"><label class="f">日付<input id="ng_date" type="date" value="${ds}"></label><label class="f">開始時間<input id="ng_time" type="time" step="60" value="09:00"></label></div>
     <div class="row"><label class="f">球場<input id="ng_venue" placeholder="例：市民球場"></label><label class="f">イニング数<select id="ng_inn">${[5,6,7,9].map(n=>`<option ${n===7?'selected':''}>${n}</option>`).join('')}</select></label></div>
     <div class="row"><label class="f">攻撃<select id="ng_top"><option value="1">先攻（表）</option><option value="0">後攻（裏）</option></select></label><label class="f">相手の先発投手<input id="ng_opit" placeholder="名前か背番号（任意）"></label></div>
     <div class="row"><label class="f">ユニフォーム<select id="ng_uni"><option value="1">ファースト（公式）</option><option value="2">セカンド</option></select></label></div>
@@ -644,17 +656,21 @@ function renderSheet(g,S){
   if(!g||!S){sheet=null;return''}
   if(sheet.type==='runner'){
     const i=sheet.base,r=S.bases[i];if(!r){sheet=null;return''}
-    const nx=i===2?'生還':BASEN[i+1]+'へ';
+    const why=sheet.why||'adv';
+    const whys=[['adv','進塁'],['SB','盗塁'],['WP','暴投・捕逸'],['E','エラー']];
+    const tg=[0,1,2,3].filter(t=>t!==i).map(t=>{const blocked=t<i&&S.bases[t];const lab=t===3?'本塁（生還）':BASEN[t]+(t<i?'へ戻す':'へ');
+      return `<button class="rb ${t===3?'hit':''}" data-act="run" data-to="${t}" data-why="${why}" ${blocked?'disabled style="opacity:.4"':''}>${lab}</button>`}).join('');
     body=`<h3>${BASEN[i]}走者　${esc(S.rname(r))}</h3>
+    <div class="lbl" style="margin:0">理由</div>
+    <div class="seg">${whys.map(([k,l])=>`<button aria-pressed="${why===k}" data-act="runwhy" data-v="${k}">${l}</button>`).join('')}</div>
+    <div class="lbl" style="margin:0">どこまで進んだか</div>
+    <div class="res" style="grid-template-columns:repeat(3,1fr)">${tg}</div>
+    <div class="lbl" style="margin:0">アウト</div>
     <div class="res" style="grid-template-columns:repeat(2,1fr)">
-      <button class="rb hit" data-act="run" data-to="next" data-why="SB">盗塁（${nx}）</button>
-      <button class="rb" data-act="run" data-to="next" data-why="WP">暴投・捕逸（${nx}）</button>
-      <button class="rb" data-act="run" data-to="next" data-why="adv">進塁（${nx}）</button>
-      <button class="rb" data-act="run" data-to="home" data-why="adv">生還（1点）</button>
       <button class="rb" data-act="run" data-to="out" data-why="CS">盗塁死</button>
       <button class="rb" data-act="run" data-to="out" data-why="PO">牽制死・走塁死</button></div>
     ${r.us?`<button class="btn ghost" data-act="open" data-v="pr">代走を出す</button>`:''}
-    <p class="small muted" style="margin:0">打席の直後に「進塁」「生還」で入った得点は、その打者の打点になります。</p>`;
+    <p class="small muted" style="margin:0">前の塁に走者がいるときは、その走者も押し出されて進みます。打席の直後に「進塁」で入った得点は、その打者の打点になります。</p>`;
   }else if(sheet.type==='pr'){
     const r=S.bases[sheet.base];const slot=r?S.lineup.findIndex(x=>x.pid===r.pid):-1;
     body=`<h3>代走　${r?esc(S.rname(r)):''} に代えて</h3>${pickList(benchOf(g,S),'dosub',`data-slot="${slot}" data-kind="代走"`)}`;
@@ -678,7 +694,7 @@ function renderSheet(g,S){
     body=`<h3>相手の投手交代</h3><form class="form" data-form="opppitch"><label class="f">新しい投手（名前か背番号）<input id="op_name" value="${n}番手" data-keep="no"></label><button class="btn" type="submit">交代を記録</button></form>`;
   }else if(sheet.type==='delgame'){
     const gm=games[sheet.gid];
-    body=`<h3>この試合を削除しますか？</h3><p class="muted" style="margin:0">${gm?esc(gm.date)+' '+esc(gm.opponent)+' 戦の':''}記録がすべて消え、元に戻せません。</p><div class="row"><button class="btn danger" data-act="dodelgame">削除する</button><button class="btn ghost" data-act="close">やめる</button></div>`;
+    body=`<h3>この試合を削除しますか？</h3><p class="muted" style="margin:0">${gm?esc(gdate(gm))+' '+esc(gm.opponent)+' 戦の':''}記録がすべて消え、元に戻せません。</p><div class="row"><button class="btn danger" data-act="dodelgame">削除する</button><button class="btn ghost" data-act="close">やめる</button></div>`;
   }else if(sheet.type==='end'){
     body=`<h3>試合終了にしますか？</h3><p class="muted" style="margin:0">時間切れ・コールドなどで終わるときに使います。あとから「取り消し」で戻せます。</p><div class="row"><button class="btn danger" data-act="doend">試合終了にする</button><button class="btn ghost" data-act="close">やめる</button></div>`;
   }
@@ -699,6 +715,7 @@ document.addEventListener('click',ev=>{
     case'pa':push({t:'pa',c:v,d:dirSel||null});dirSel=null;render();break;
     case'undo':undo();break;
     case'runner':sheet={type:'runner',base:+v};render();break;
+    case'runwhy':sheet.why=v;render();break;
     case'run':push({t:'run',base:sheet.base,to:el.dataset.to,why:el.dataset.why});sheet=null;render();break;
     case'open':sheet={type:v,base:sheet&&sheet.base,gid:el.dataset.g};render();break;
     case'close':sheet=null;render();break;
@@ -737,6 +754,7 @@ document.addEventListener('change',ev=>{
   if(el.id==='scorerSw'){scorer=el.checked;lsSet('scorer',scorer?'1':'0');render()}
   if(el.id==='sb_slot'&&sheet){sheet.slot=+el.value;sheet.pos=null;render()}
   if(/^lp\d$/.test(el.id))dhToggle();
+  if(el.id==='ng_uni')uniLabels();
 });
 function addPlayer(g,pid){if(!g.players[pid]){const p=team.players.find(x=>x.id===pid);if(p)g.players[pid]={num:numFor(p,g),name:p.name}}}
 function syncGameNums(pl){Object.values(games).forEach(gm=>{if(gm.players&&gm.players[pl.id]&&!replay(gm).ended){gm.players[pl.id]={num:numFor(pl,gm),name:pl.name};saveGame(gm.id)}})}
@@ -776,7 +794,7 @@ document.addEventListener('submit',ev=>{
     }
     const uniform=document.getElementById('ng_uni').value;const players={};team.players.forEach(p=>players[p.id]={num:numFor(p,{uniform}),name:p.name});
     const id=uid();
-    games[id]={id,createdAt:Date.now(),updatedAt:Date.now(),usName:team.name||'自チーム',opponent:opp,date:document.getElementById('ng_date').value,
+    games[id]={id,createdAt:Date.now(),updatedAt:Date.now(),usName:team.name||'自チーム',opponent:opp,date:document.getElementById('ng_date').value,time:document.getElementById('ng_time').value||'',
       venue:document.getElementById('ng_venue').value.trim(),innings:+document.getElementById('ng_inn').value,weTop:document.getElementById('ng_top').value==='1',
       oppPitcher:document.getElementById('ng_opit').value.trim()||'先発投手',lineup,startPitcher:sp.pid,players,uniform,events:[]};
     saveGame(id);setCurrent(id);viewId=id;tab='live';render();window.scrollTo(0,0);toast('試合を作りました。速報を始めましょう');
@@ -997,6 +1015,7 @@ async function resolveRole(user){
 
 /* ---------- boot ---------- */
 render();
+function uniLabels(){const u=document.getElementById('ng_uni');if(!u)return;const k=u.value==='2'?'n2':'n1';document.querySelectorAll('#lu0,#lu1,#lu2,#lu3,#lu4,#lu5,#lu6,#lu7,#lu8,#ng_sp').forEach(sel=>[...sel.options].forEach(o=>{if(o.value)o.textContent=o.dataset[k]+' '+o.dataset.nm}))}
 function dhToggle(){const row=document.getElementById('ng_sprow');if(!row)return;const pos=[...Array(9)].map((_,i)=>document.getElementById('lp'+i)?.value);row.hidden=!(pos.includes('指')&&!pos.includes('投'))}
 (function boot(){
   const cfg=window.FIREBASE_CONFIG;
