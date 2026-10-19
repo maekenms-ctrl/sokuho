@@ -630,7 +630,7 @@ function renderRoster(){
       <div class="row"><button class="btn" type="submit">保存</button><button class="btn ghost" type="button" data-act="cancelp">やめる</button><button class="btn ghost" type="button" data-act="delp" data-v="${p.id}" style="margin-left:auto;color:var(--danger)">削除</button></div></form></li>`
     :`<li><img class="uimg" src="uni1.png" alt="1st"><span class="uni"><span class="ul">1st</span><b>${esc(p.num||'-')}</b></span><img class="uimg" src="uni2.png" alt="2nd"><span class="uni two"><span class="ul">2nd</span><b>${esc(p.num2||'-')}</b></span><span class="nm">${esc(p.name)}</span>${can?`<button class="x" data-act="editp" data-v="${p.id}">変更</button>`:''}</li>`;
   const list=sorted.length?`<ul class="roster">${sorted.map(row).join('')}</ul>`:'<p class="muted small">まだ選手が登録されていません。</p>';
-  const form=can?`<div class="card pad"><h2>選手を追加</h2>
+  const addCard=can?`<div class="card pad"><h2>選手を追加</h2>
     <form class="form" data-form="addplayer">
       <div class="addrow">
         <label class="f n"><span class="ulab"><img class="uimg" src="uni1.png" alt="">1st</span><small>ファースト</small><input id="ap_n1" inputmode="numeric" pattern="[0-9]*" maxlength="3" placeholder="10" data-keep="no"></label>
@@ -639,11 +639,11 @@ function renderRoster(){
       </div>
       <button class="btn" type="submit">＋ 名簿に追加</button>
       <p class="small muted" style="margin:0">2ndが1stと同じ番号なら、2ndは空けたままで大丈夫です。追加すると次の選手をすぐ入力できます。</p>
-    </form></div>
-    <div class="card pad"><h2>チーム名</h2><form class="row" data-form="team"><input id="tm_name" value="${esc(team.name)}" placeholder="例：○○シニア" data-keep="no" style="flex:1"><button class="btn ghost" type="submit">保存</button></form>
+    </form></div>`:'';
+  const teamCard=can?`<div class="card pad"><h2>チーム名</h2><form class="row" data-form="team"><input id="tm_name" value="${esc(team.name)}" placeholder="例：○○シニア" data-keep="no" style="flex:1"><button class="btn ghost" type="submit">保存</button></form>
     <details style="margin-top:12px"><summary class="small" style="cursor:pointer;font-weight:700">まとめて貼り付けて追加する（パソコン向け）</summary>
       <form class="form" data-form="bulk" style="margin-top:8px"><textarea id="tm_bulk" placeholder="10 22 山田 太郎&#10;1 11 佐藤 翔"></textarea><p class="small muted" style="margin:0">1行に「1stの番号 2ndの番号 名前」</p><button class="btn ghost" type="submit">まとめて追加</button></form></details></div>`:'';
-  return form+`<div class="card pad"><h2>選手名簿 ${sorted.length?`（${sorted.length}人）`:''}</h2>${list}</div>`;
+  return `<div class="card pad"><h2>選手名簿 ${sorted.length?`（${sorted.length}人）`:''}</h2>${list}</div>`+teamCard+addCard;
 }
 
 /* ---------- sheets ---------- */
