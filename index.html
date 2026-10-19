@@ -78,8 +78,15 @@ h2{font-size:13px;letter-spacing:.06em;color:var(--muted);margin:0 0 8px;font-we
 
 /* live situation */
 .sit{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}
-.fmode{margin-bottom:8px}
-.fmode button{font-size:13px}
+.stack{display:flex;flex-direction:column;gap:12px}
+.stack .sit{margin-bottom:0}
+.bso1{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.bso1 .bl{display:flex;align-items:center;gap:5px}
+.bso1 b{font-family:var(--f-num);font-size:18px;width:14px;text-align:center}
+.stack .mu{margin-top:0}
+.fieldwrap.ed .field{max-width:300px}
+.chip.mini{padding:4px 10px;font-size:12px;min-width:0}
+.f-pl.miss rect{fill:rgba(200,50,40,.9)}
 .bso{display:grid;grid-template-columns:auto auto;gap:6px 8px;align-items:center}
 .bso b{font-family:var(--f-num);font-size:18px;font-weight:700;width:14px}
 .lamps{display:flex;gap:6px}
@@ -398,15 +405,21 @@ function replay(g){
     }
     else if(e.t==='sub'){
       const old=S.lineup[e.slot].pid;const runBase=S.bases.findIndex(r=>r&&r.us&&r.pid===old);
-      S.lineup[e.slot]={pid:e.pid,pos:e.pos||S.lineup[e.slot].pos};
+      const oldPos=S.lineup[e.slot].pos;const np=e.pos||oldPos;let swapTx='';
+      if(np!==oldPos){const j=S.lineup.findIndex((x,i)=>i!==e.slot&&x.pos===np);if(j>=0&&oldPos!=='投'&&oldPos!=='指'){S.lineup[j].pos=oldPos;S.hist[j][S.hist[j].length-1].trail.push(oldPos);swapTx=`、${pname(S.lineup[j].pid)}が${PN(oldPos)}へ`}}
+      S.lineup[e.slot]={pid:e.pid,pos:np};
       const lab={代打:'打',代走:'走'}[e.kind]||e.pos;
       S.hist[e.slot].push({pid:e.pid,trail:[lab],kind:e.kind});
       if(e.kind==='代走')S.bases=S.bases.map(r=>r&&r.us&&r.pid===old?{us:true,pid:e.pid}:r);
-      log({kind:'sub',text:e.kind==='代打'?`代打　${pname(old)}がベンチに下がり、${pname(e.pid)}が打席へ`:e.kind==='代走'?`代走　${pname(old)}がベンチに下がり、${pname(e.pid)}が${runBase>=0?BASEN[runBase]+'ランナーに':'ランナーに'}`:`守備交代　${pname(old)}がベンチに下がり、${pname(e.pid)}が${PN(e.pos)}の守備へ`,score:[tot(0),tot(1)]});
+      log({kind:'sub',text:e.kind==='代打'?`代打　${pname(old)}がベンチに下がり、${pname(e.pid)}が打席へ`:e.kind==='代走'?`代走　${pname(old)}がベンチに下がり、${pname(e.pid)}が${runBase>=0?BASEN[runBase]+'ランナーに':'ランナーに'}`:`守備交代　${pname(old)}がベンチに下がり、${pname(e.pid)}が${PN(np)}の守備へ${swapTx}`,score:[tot(0),tot(1)]});
     }
     else if(e.t==='pos'){
-      const L=S.lineup[e.slot];L.pos=e.pos;const h=S.hist[e.slot];h[h.length-1].trail.push(e.pos);
-      log({kind:'sub',text:`守備位置変更　${pname(L.pid)}が${PN(e.pos)}へ`,score:[tot(0),tot(1)]});
+      const L=S.lineup[e.slot];const prev=L.pos;if(prev===e.pos)continue;
+      const j=S.lineup.findIndex((x,i)=>i!==e.slot&&x.pos===e.pos);
+      L.pos=e.pos;const h=S.hist[e.slot];h[h.length-1].trail.push(e.pos);
+      let tx=`守備位置変更　${pname(L.pid)}が${PN(e.pos)}へ`;
+      if(j>=0&&prev!=='投'&&prev!=='指'){S.lineup[j].pos=prev;S.hist[j][S.hist[j].length-1].trail.push(prev);tx+=`、${pname(S.lineup[j].pid)}が${PN(prev)}へ`}
+      log({kind:'sub',text:tx,score:[tot(0),tot(1)]});
     }
     else if(e.t==='pitcher'){
       if(e.side==='us'){
@@ -502,7 +515,9 @@ function renderBody(g,S){
   if(noDb)return `<div class="card empty"><h3>初期設定がまだです</h3><p class="muted">firebase-config.js に Firebase の設定を書き込むと、速報が使えるようになります。</p></div>`;
   if(!booted)return `<div class="card empty"><p class="muted">試合データを読み込んでいます…</p></div>`;
   let modebar='';
-  if(isScorer())modebar=`<div class="modebar"><span class="small muted">${scorer?'記録係モード：入力できます':'閲覧モード'}　${syncLabel()}</span><label class="switch"><input type="checkbox" id="scorerSw" data-act="scorer" ${scorer?'checked':''}> 記録する</label></div>`;
+  const posBtn=tab==='live'&&g&&!S?.ended?`<button class="chip mini" aria-pressed="${fieldMode==='pos'}" data-act="fmode" data-v="${fieldMode==='pos'?'runner':'pos'}">守備位置</button>`:'';
+  if(isScorer())modebar=`<div class="modebar"><span class="small muted">${scorer?'記録係モード':'閲覧モード'}　${syncLabel()}</span><div class="row" style="gap:10px;flex-wrap:nowrap">${posBtn}<label class="switch"><input type="checkbox" id="scorerSw" data-act="scorer" ${scorer?'checked':''}> 記録する</label></div></div>`;
+  else if(posBtn)modebar=`<div class="modebar"><span></span>${posBtn}</div>`;
   let main;
   if(tab==='admin'&&isOwner())main=renderAdmin();
   else if(tab==='rules')main=renderRules();
@@ -559,10 +574,12 @@ function fieldSvg(g,S,tap){
   if(fieldMode==='pos'){
     const usLine=S.lineup;const pl=g.players||{};
     const lab=(pid)=>{const p=pl[pid]||{};return {n:p.num||'',s:surname(p.name||S.pname(pid))}};
-    const items=[];usLine.forEach(x=>{if(POSXY[x.pos])items.push([x.pos,x.pid])});
-    if(!usLine.some(x=>x.pos==='投')&&S.usP)items.push(['投',S.usP]);
+    const items=[];usLine.forEach(x=>{if(POSXY[x.pos]&&x.pos!=='投')items.push([x.pos,x.pid])});
+    if(S.usP)items.push(['投',S.usP]);
+    const miss=['捕','一','二','三','遊','左','中','右'].filter(p=>!usLine.some(x=>x.pos===p));
     over=items.map(([pos,pid])=>{const [x,y]=POSXY[pos];const L=lab(pid);const w=Math.max(46,L.s.length*12+(L.n?String(L.n).length*7+12:0));
       return `<g class="f-pl"><rect x="${x-w/2}" y="${y-11}" width="${w}" height="22" rx="11"/><text x="${x}" y="${y+4.5}" text-anchor="middle">${L.n?`<tspan class="f-no">${esc(L.n)}</tspan> `:''}${esc(L.s)}</text></g>`}).join('');
+    over+=miss.map(p=>{const [x,y]=POSXY[p];return `<g class="f-pl miss"><rect x="${x-26}" y="${y-11}" width="52" height="22" rx="11"/><text x="${x}" y="${y+4.5}" text-anchor="middle">${p} ?</text></g>`}).join('');
     const dh=usLine.find(x=>x.pos==='指');
     if(dh){const L=lab(dh.pid);over+=`<text class="f-dh" x="6" y="250">指名打者 ${L.n?'#'+esc(L.n)+' ':''}${esc(L.s)}</text>`}
     ground+=[0,1,2].map(i=>`<rect class="f-base" x="${B[i][0]-4}" y="${B[i][1]-4}" width="8" height="8" transform="rotate(45 ${B[i][0]} ${B[i][1]})"/>`).join('');
@@ -596,16 +613,15 @@ function renderLive(g,S){
     let bLine='';if(usBat){const st=S.bat[B.pid];bLine=st?`今日 ${st.AB}打数${st.H}安打${st.RBI?' '+st.RBI+'打点':''}`:'今日の初打席'}
     const pk=S.pitKey;const P=S.pit[pk]||{np:0,K:0,BB:0,outs:0};
     const pName=pk.startsWith('u:')?S.pname(pk.slice(2)):pk.slice(2);
-    sit=`<div class="card pad"><div class="sit">
-      <div><div class="inn">${S.inning}<small>回${S.half?'裏':'表'}</small></div>
-      <div class="small muted" style="margin-top:2px">${esc(S.half===0?t:b)}の攻撃</div></div>
-      <div class="bso"><b style="color:var(--lamp-b)">B</b><div class="lamps">${lamps(S.b,3,'b')}</div><b style="color:var(--lamp-s)">S</b><div class="lamps">${lamps(S.s,2,'s')}</div><b style="color:var(--lamp-o)">O</b><div class="lamps">${lamps(S.outs,2,'o')}</div></div></div>
-      <div class="fmode seg"><button aria-pressed="${fieldMode==='runner'}" data-act="fmode" data-v="runner">ランナー・打球</button><button aria-pressed="${fieldMode==='pos'}" data-act="fmode" data-v="pos">${esc(g.usName)}の守備位置</button></div>
-      ${fieldSvg(g,S,editing()&&fieldMode==='runner')}
-      <div class="mu"><div><div class="k">打者</div><div class="v">${bName}</div><div class="d">${bLine}</div></div>
-      <div><div class="k" style="display:flex;justify-content:space-between;align-items:center">投手${editing()?`<button class="x" data-act="open" data-v="${pk.startsWith('u:')?'pitcher':'opppitcher'}" style="padding:0;color:var(--accent);font-weight:700">交代 ›</button>`:''}</div><div class="v">${esc(pName)}</div><div class="np">${P.np}<span>球</span></div></div></div>
-      ${S.seq.length?`<div class="seq" style="margin-top:10px">${S.seq.map((k,i)=>editing()?`<button class="pc ${k} fixp" data-act="fix" data-v="${S.seqIdx[i]}" aria-label="${i+1}球目を訂正">${i+1}</button>`:`<span class="pc ${k}">${i+1}</span>`).join('')}${editing()?'<span class="small muted" style="margin-left:4px">丸をタップで訂正</span>':''}</div>`:''}
-    </div>`;
+    const ed=editing();
+    const bso=`<div class="bso1"><span class="bl"><b style="color:var(--lamp-b)">B</b>${lamps(S.b,3,'b')}</span><span class="bl"><b style="color:var(--lamp-s)">S</b>${lamps(S.s,2,'s')}</span><span class="bl"><b style="color:var(--lamp-o)">O</b>${lamps(S.outs,2,'o')}</span></div>`;
+    const head=`<div class="sit"><div><div class="inn">${S.inning}<small>回${S.half?'裏':'表'}</small></div><div class="small muted" style="margin-top:2px">${esc(S.half===0?t:b)}の攻撃</div></div>${bso}</div>`;
+    const seq=S.seq.length?`<div class="seq">${S.seq.map((k,i)=>ed?`<button class="pc ${k} fixp" data-act="fix" data-v="${S.seqIdx[i]}" aria-label="${i+1}球目を訂正">${i+1}</button>`:`<span class="pc ${k}">${i+1}</span>`).join('')}${ed?'<span class="small muted" style="margin-left:4px">丸をタップで訂正</span>':''}</div>`:'';
+    const mu=`<div class="mu"><div><div class="k">打者</div><div class="v">${bName}</div><div class="d">${bLine}</div></div>
+      <div><div class="k" style="display:flex;justify-content:space-between;align-items:center">投手${ed?`<button class="x" data-act="open" data-v="${pk.startsWith('u:')?'pitcher':'opppitcher'}" style="padding:0;color:var(--accent);font-weight:700">交代 ›</button>`:''}</div><div class="v">${esc(pName)}</div><div class="np">${P.np}<span>球</span></div></div></div>`;
+    const cnt=`<div class="cnt"><button class="big B" data-act="p" data-v="B">ボール</button><button class="big S" data-act="p" data-v="S">見逃し</button><button class="big W" data-act="p" data-v="W">空振り</button><button class="big F" data-act="p" data-v="F">ファウル</button></div>`;
+    const field=`<div class="fieldwrap ${ed?'ed':''}">${fieldMode==='pos'?`<div class="small muted" style="text-align:center;margin-bottom:2px">${esc(g.usName)}の守備位置</div>`:''}${fieldSvg(g,S,ed&&fieldMode==='runner')}</div>`;
+    sit=ed?`<div class="card pad stack">${head}${cnt}${seq}${mu}${field}</div>`:`<div class="card pad stack">${head}${seq}${mu}${field}</div>`;
   }
   const panel=editing()&&!S.ended?inputPanel(g,S):(editing()&&S.ended?`<div class="card pad row"><span class="muted small" style="flex:1">試合終了の記録を取り消すと再開できます。</span><button class="btn ghost" data-act="undo">取り消し</button></div>`:'');
   const recent=S.log.slice(-6).reverse();
@@ -630,8 +646,6 @@ function playItem(e){
 function inputPanel(g,S){
   const fieldingUs=S.half!==S.usHalf;
   return `<section class="card pad panel" aria-label="記録入力">
-    <div class="lbl">カウント</div>
-    <div class="cnt"><button class="big B" data-act="p" data-v="B">ボール</button><button class="big S" data-act="p" data-v="S">見逃し</button><button class="big W" data-act="p" data-v="W">空振り</button><button class="big F" data-act="p" data-v="F">ファウル</button></div>
     <div class="lbl">打球方向（任意・先に選ぶ）</div>
     <div class="dirs">${Object.keys(FIELD).map(d=>`<button class="chip" aria-pressed="${dirSel===d}" data-act="dir" data-v="${d}">${d}</button>`).join('')}</div>
     <div class="dirs">${Object.keys(ZONE).map(d=>`<button class="chip" aria-pressed="${dirSel===d}" data-act="dir" data-v="${d}">${ZONE[d]}</button>`).join('')}</div>
@@ -829,8 +843,8 @@ function renderSheet(g,S){
     const slots=S.lineup.map((x,i)=>`<option value="${i}" ${i===slot?'selected':''}>${i+1}番 ${esc(S.pname(x.pid))}（${x.pos}）</option>`).join('');
     let inner='';
     if(mode==='代打')inner=`<p class="small muted" style="margin:0">交代する打順</p><select id="sb_slot" data-act="subslot">${slots}</select>${pickList(benchOf(g,S),'dosub',`data-slot="${slot}" data-kind="代打"`)}`;
-    else if(mode==='守備')inner=`<div class="row"><select id="sb_slot" data-act="subslot" style="flex:2">${slots}</select><select id="sb_pos" style="flex:1">${POS.map(p=>`<option ${p===(sheet.pos||S.lineup[slot].pos)?'selected':''}>${p}</option>`).join('')}</select></div>${pickList(benchOf(g,S),'dosub',`data-slot="${slot}" data-kind="守備"`)}`;
-    else inner=`<p class="small muted" style="margin:0">打順を変えずに守備位置だけを変えます。</p><div class="form">${S.lineup.map((x,i)=>`<div class="row"><span style="flex:1;font-weight:700">${i+1}番 ${esc(S.pname(x.pid))}</span><div class="dirs">${POS.map(p=>`<button class="chip" aria-pressed="${x.pos===p}" data-act="dopos" data-slot="${i}" data-v="${p}">${p}</button>`).join('')}</div></div>`).join('')}</div>`;
+    else if(mode==='守備')inner=`<div class="row"><select id="sb_slot" data-act="subslot" style="flex:2">${slots}</select><select id="sb_pos" style="flex:1">${[...new Set([S.lineup[slot].pos,...['捕','一','二','三','遊','左','中','右']])].map(p=>`<option ${p===(sheet.pos||S.lineup[slot].pos)?'selected':''}>${p}</option>`).join('')}</select></div>${pickList(benchOf(g,S),'dosub',`data-slot="${slot}" data-kind="守備"`)}`;
+    else inner=`<p class="small muted" style="margin:0">打順を変えずに守備位置を変えます。ほかの選手が守っている位置を選ぶと、2人の守備位置が入れ替わります。投手は「投手交代」から変えてください。</p><div class="form">${S.lineup.map((x,i)=>{const fixed=x.pos==='指'||(x.pos==='投'&&x.pid===S.usP);return `<div class="row"><span style="flex:1;min-width:120px;font-weight:700">${i+1}番 ${esc(S.pname(x.pid))}<span class="small muted">（${x.pos}）</span></span>${fixed?`<span class="small muted">${x.pos==='指'?'指名打者':'投手'}</span>`:`<div class="dirs">${['捕','一','二','三','遊','左','中','右'].map(p=>`<button class="chip" aria-pressed="${x.pos===p}" data-act="dopos" data-slot="${i}" data-v="${p}">${p}</button>`).join('')}</div>`}</div>`}).join('')}</div>`;
     body=`<h3>選手交代</h3><div class="seg">${seg}</div>${inner}`;
   }else if(sheet.type==='pitcher'){
     const P=S.pit['u:'+S.usP]||{np:0,outs:0,H:0,K:0,BB:0,HBP:0,R:0,bf:0};
@@ -978,6 +992,9 @@ document.addEventListener('submit',ev=>{
     for(let i=0;i<9;i++){const pid=document.getElementById('lu'+i).value;const pos=document.getElementById('lp'+i).value;
       if(!pid){toast(`${i+1}番の選手を選んでください`);return}if(seen.has(pid)){toast('同じ選手が2回選ばれています');return}seen.add(pid);lineup.push({pid,pos})}
     const pIn=lineup.filter(x=>x.pos==='投');const hasDH=lineup.some(x=>x.pos==='指');
+    const dup=lineup.map(x=>x.pos).find((p,i,a)=>a.indexOf(p)!==i);if(dup){toast(`守備位置「${dup}」が2人います`);return}
+    const lack=['捕','一','二','三','遊','左','中','右'].filter(p=>!lineup.some(x=>x.pos===p));if(lack.length){toast(`守備位置「${lack.join('・')}」の選手がいません`);return}
+    if(hasDH&&pIn.length){toast('指名打者を使うときは、打順に「投」を入れず、下の欄で先発投手を選んでください');return}
     if(pIn.length>1){toast('守備位置「投」が2人います');return}
     let sp=pIn[0];
     if(!sp){
@@ -1211,7 +1228,7 @@ async function resolveRole(user){
 /* ---------- boot ---------- */
 render();
 function uniLabels(){const u=document.getElementById('ng_uni');if(!u)return;const k=u.value==='2'?'n2':'n1';document.querySelectorAll('#lu0,#lu1,#lu2,#lu3,#lu4,#lu5,#lu6,#lu7,#lu8,#ng_sp').forEach(sel=>[...sel.options].forEach(o=>{if(o.value)o.textContent=o.dataset[k]+' '+o.dataset.nm}))}
-function dhToggle(){const row=document.getElementById('ng_sprow');if(!row)return;const pos=[...Array(9)].map((_,i)=>document.getElementById('lp'+i)?.value);row.hidden=!(pos.includes('指')&&!pos.includes('投'))}
+function dhToggle(){const row=document.getElementById('ng_sprow');if(!row)return;const pos=[...Array(9)].map((_,i)=>document.getElementById('lp'+i)?.value);row.hidden=!pos.includes('指')}
 (function boot(){
   const cfg=window.FIREBASE_CONFIG;
   if(!window.firebase||!cfg||!cfg.apiKey||/ここに/.test(cfg.apiKey)){noDb=true;booted=true;render();return}
