@@ -178,6 +178,11 @@ textarea{min-height:120px}
 .seg button{flex:1;border:0;background:none;border-radius:7px;padding:9px 4px;font-weight:700;font-size:14px}
 .seg button[aria-pressed="true"]{background:var(--surface);box-shadow:0 1px 2px rgba(0,0,0,.15)}
 
+.toast button{margin-left:12px;border:0;background:var(--accent);color:var(--accent-ink);border-radius:99px;padding:4px 12px;font-weight:700;font-size:13px}
+.fixable{cursor:pointer;border-radius:8px}
+.fixable:active{background:var(--soft)}
+.pen{margin-left:8px;font-size:11px;font-weight:700;color:var(--accent);border:1px solid var(--accent);border-radius:99px;padding:0 6px;vertical-align:1px}
+button.pc{border:0;padding:0;cursor:pointer}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:99px;font-size:14px;z-index:60;max-width:calc(100% - 32px)}
 .modebar{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .switch{display:flex;gap:8px;align-items:center;font-size:13px;font-weight:700}
@@ -217,6 +222,12 @@ mark{background:var(--note-line);color:var(--ink);border-radius:3px;padding:0 2p
 .uni .ul{font-size:10px;color:var(--muted);font-weight:700;letter-spacing:.04em}
 .uni b{font-family:var(--f-num);font-size:21px}
 .uni.two b{color:var(--muted)}
+.fseq{font-size:34px;font-weight:700;text-align:center;letter-spacing:.04em;padding:6px;background:var(--soft);border-radius:10px;min-height:56px;display:flex;align-items:center;justify-content:center;gap:2px}
+.fseq span{color:var(--accent);margin:0 2px}
+.fpad{display:grid;grid-template-columns:repeat(9,1fr);gap:4px}
+.fpad button{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 0;display:flex;flex-direction:column;align-items:center;line-height:1.1;min-height:48px}
+.fpad b{font-family:var(--f-num);font-size:20px}
+.fpad small{font-size:10px;color:var(--muted)}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -256,7 +267,10 @@ function lsGet(k,d){try{const v=localStorage.getItem(k);return v==null?d:v}catch
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function uid(){return (crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2)).replace(/[^A-Za-z0-9_-]/g,'')}
-let toastT;function toast(m){const t=document.getElementById('toast');t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2200)}
+let toastT,undoFn=null;function toast(m){const t=document.getElementById('toast');t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2200)}
+function toastUndo(m,fn){undoFn=fn;const t=document.getElementById('toast');t.innerHTML=`${esc(m)}<button data-act="toastundo">元に戻す</button>`;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>{t.hidden=true;undoFn=null},6000)}
+function fixEdit(fn,msg){const gm=cur();const ev=gm.events[sheet.ei];if(!ev)return;const before=JSON.stringify(ev);fn(ev);gm.updatedAt=Date.now();saveGame(gm.id);const ei=sheet.ei;sheet=null;render();
+  const gid=gm.id;toastUndo(msg,()=>{const g2=games[gid];if(!g2)return;g2.events[ei]=JSON.parse(before);g2.updatedAt=Date.now();saveGame(gid);render()})}
 
 /* ---------- game engine: state is rebuilt by replaying events ---------- */
 function replay(g){
@@ -273,10 +287,10 @@ function replay(g){
   const tot=h=>S.score[h].reduce((a,b)=>a+(b||0),0);
   const batter=()=>{const slot=S.order[S.half]%9;return S.half===usHalf?{us:true,pid:S.lineup[slot].pid,slot}:{us:false,slot}};
   const rname=r=>r.us?pname(r.pid):`相手${r.slot+1}番`;
-  const log=(o)=>S.log.push({inning:S.inning,half:S.half,...o});
+  const log=(o)=>S.log.push({inning:S.inning,half:S.half,ei:S.ei,...o});
   function endHalf(){
     if(S.ended)return;
-    S.outs=0;S.b=0;S.s=0;S.bases=[null,null,null];S.seq=[];S.since=0;S.lastBatter=null;
+    S.outs=0;S.b=0;S.s=0;S.bases=[null,null,null];S.seq=[];S.seqIdx=[];S.since=0;S.lastBatter=null;
     if(S.half===0){
       if(S.inning>=g.innings&&tot(1)>tot(0)){S.ended=true;return}
       S.half=1;if(S.score[1][S.inning-1]==null)S.score[1][S.inning-1]=0;
@@ -293,9 +307,9 @@ function replay(g){
     if(rbiPid)bat(rbiPid).RBI++;
     if(S.half===1&&S.inning>=g.innings&&tot(1)>tot(0)){S.ended=true;S.walkoff=true}
   }
-  function pa(code,dir,auto){
+  function pa(code,dir,auto,ex){
     const B=batter(),P=pit(pitKey());
-    if(!auto){P.np++;S.seq.push('X')}
+    if(!auto){P.np++;S.seq.push('X');S.seqIdx.push(S.ei)}
     P.bf++;
     const br=B.us?{us:true,pid:B.pid}:{us:false,slot:B.slot};
     const b=S.bases;let nb=[null,null,null],runs=[],outs=0;
@@ -311,7 +325,9 @@ function replay(g){
       case'SAC':advAll(1);outs=1;break;
       case'SF':nb=b.slice();if(nb[2]){runs.push(nb[2]);nb[2]=null}outs=1;break;
       case'FC':nb=b.slice();if(b[0]){const k=b[1]?(b[2]?2:1):0;for(let j=k;j>0;j--)nb[j]=b[j-1];outs=1}nb[0]=br;break;
-      case'DP':nb=b.slice();if(nb[0])nb[0]=null;else{for(let i=2;i>=0;i--)if(nb[i]){nb[i]=null;break}}outs=2;break;
+      case'DP':nb=b.slice();
+        if(ex&&ex.o&&ex.o.length){let o=0;ex.o.forEach(x=>{if(x==='b')o++;else if(nb[x]){nb[x]=null;o++}});if(!ex.o.includes('b')&&!nb[0])nb[0]=br;outs=o}
+        else{if(nb[0])nb[0]=null;else{for(let i=2;i>=0;i--)if(nb[i]){nb[i]=null;break}}outs=2}break;
     }
     if(S.outs+outs>=3)runs=[];
     if(B.us){const st=bat(B.pid);st.PA++;
@@ -322,40 +338,42 @@ function replay(g){
     if(code==='K')P.K++;if(code==='BB')P.BB++;if(code==='HBP')P.HBP++;
     const eligible=!['E','DP'].includes(code);
     const kind=code==='K'?(S.seq[S.seq.length-1]==='S'?'見逃し三振':S.seq[S.seq.length-1]==='W'?'空振り三振':'三振'):null;
-    const entry={kind:'pa',who:rname(br),slot:B.slot,us:B.us,code,text:resText(code,dir,kind),seq:S.seq.slice(),runs:runs.length,outsAfter:Math.min(3,S.outs+outs)};
+    const entry={kind:'pa',who:rname(br),slot:B.slot,us:B.us,code,text:(t=>outs>=3&&code==='DP'?t.replace('併殺','三重殺').replace('ダブルプレー','トリプルプレー'):t)(resText(code,dir,kind))+(ex&&ex.f?`（${ex.f}）`:''),seq:S.seq.slice(),seqIdx:S.seqIdx.slice(),auto:!!auto,runs:runs.length,outsAfter:Math.min(3,S.outs+outs)};
     S.bases=S.outs+outs>=3?[null,null,null]:nb;
     runs.forEach(r=>scoreRun(r,eligible&&B.us?B.pid:null));
     entry.score=[tot(0),tot(1)];
     log(entry);
-    S.order[S.half]++;S.b=0;S.s=0;S.seq=[];S.since=0;
+    S.order[S.half]++;S.b=0;S.s=0;S.seq=[];S.seqIdx=[];S.since=0;
     S.lastEligible=eligible;S.lastBatter=B.us?B.pid:null;
     addOut(outs);
   }
   function moveUp(i,rbi){const r=S.bases[i];if(!r)return;if(i===2){S.bases[2]=null;scoreRun(r,rbi)}else{if(S.bases[i+1])moveUp(i+1,rbi);S.bases[i+1]=r;S.bases[i]=null}}
-  for(const e of g.events||[]){
+  S.seqIdx=[];const EV=g.events||[];
+  for(let ei=0;ei<EV.length;ei++){const e=EV[ei];S.ei=ei;
     if(S.ended&&e.t!=='undo')break;
     if(e.t==='p'){
-      const P=pit(pitKey());P.np++;S.since++;S.seq.push(e.k);
+      const P=pit(pitKey());P.np++;S.since++;S.seq.push(e.k);S.seqIdx.push(ei);
       if(e.k==='B'){S.b++;if(S.b>=4)pa('BB',null,true)}
       else if(e.k==='S'||e.k==='W'){S.s++;if(S.s>=3)pa('K',null,true)}
       else if(e.k==='F'){if(S.s<2)S.s++}
-    }else if(e.t==='pa'){pa(e.c,e.d,false)}
+    }else if(e.t==='pa'){pa(e.c,e.d,false,e)}
     else if(e.t==='run'){
       const r=S.bases[e.base];if(!r)continue;
       const rbi=(e.why==='adv'&&S.since===0&&S.lastEligible&&S.lastBatter)?S.lastBatter:null;
       const before=[tot(0),tot(1)];
       let text='';
-      if(e.to==='out'){S.bases[e.base]=null;text=`${BASEN[e.base]}走者 ${rname(r)} ${e.why==='PO'?'牽制死':e.why==='CS'?'盗塁死':'走塁死'}`;log({kind:'run',text,runs:0,score:before});addOut(1);continue}
+      const fx=e.f?`（${e.f}）`:'';const btw=['一二塁間','二三塁間','三本間'][e.base];
+      if(e.to==='out'){S.bases[e.base]=null;text=e.why==='RD'?`${btw}の挟殺プレー${fx}で${BASEN[e.base]}走者 ${rname(r)} タッチアウト`:`${BASEN[e.base]}走者 ${rname(r)} ${e.why==='PO'?'牽制死':e.why==='CS'?'盗塁死':'走塁死'}${fx}`;log({kind:'run',text,runs:0,score:before});addOut(1);continue}
       if(e.why==='SB'&&r.us)bat(r.pid).SB++;
       const tgt=e.to==='home'?3:e.to==='next'?e.base+1:+e.to;
       if(tgt>=3){S.bases[e.base]=null;scoreRun(r,rbi)}
       else if(tgt>e.base){for(let k=e.base;k<tgt;k++)moveUp(k,rbi)}
       else if(tgt<e.base){if(S.bases[tgt])continue;S.bases[tgt]=r;S.bases[e.base]=null}
-      else continue;
-      const why={SB:'盗塁',WP:'暴投・捕逸',E:'エラー',adv:'進塁'}[e.why]||'進塁';
+      else{if(e.why==='RD')log({kind:'run',text:`${btw}の挟殺プレー${fx}、${BASEN[e.base]}走者 ${rname(r)} は${BASEN[e.base]}に戻ってセーフ`,runs:0,score:before});continue}
+      const why={SB:'盗塁',WP:'暴投・捕逸',E:'エラー',adv:'進塁',RD:'挟殺プレーの間に'}[e.why]||'進塁';
       const scored=tot(0)+tot(1)-before[0]-before[1];
       const where=tgt>=3?'生還':tgt<e.base?`${BASEN[tgt]}へ戻る`:`${BASEN[tgt]}へ`;
-      text=`${BASEN[e.base]}走者 ${rname(r)} ${e.why==='adv'||tgt<e.base?'':why+'で'}${where}`;
+      text=e.why==='RD'?`${btw}の挟殺プレー${fx}、${BASEN[e.base]}走者 ${rname(r)} ${where==='生還'?'生還':where}（セーフ）`:`${BASEN[e.base]}走者 ${rname(r)} ${e.why==='adv'||tgt<e.base?'':why+'で'}${where}`;
       log({kind:'run',text,runs:scored,score:[tot(0),tot(1)]});
     }
     else if(e.t==='sub'){
@@ -512,7 +530,7 @@ function renderLive(g,S){
       ${diamond(S,editing())}</div>
       <div class="mu"><div><div class="k">打者</div><div class="v">${bName}</div><div class="d">${bLine}</div></div>
       <div><div class="k">投手</div><div class="v">${esc(pName)}</div><div class="np">${P.np}<span>球</span></div></div></div>
-      ${S.seq.length?`<div class="seq" style="margin-top:10px">${S.seq.map((k,i)=>`<span class="pc ${k}">${i+1}</span>`).join('')}</div>`:''}
+      ${S.seq.length?`<div class="seq" style="margin-top:10px">${S.seq.map((k,i)=>editing()?`<button class="pc ${k} fixp" data-act="fix" data-v="${S.seqIdx[i]}" aria-label="${i+1}球目を訂正">${i+1}</button>`:`<span class="pc ${k}">${i+1}</span>`).join('')}${editing()?'<span class="small muted" style="margin-left:4px">丸をタップで訂正</span>':''}</div>`:''}
     </div>`;
   }
   const panel=editing()&&!S.ended?inputPanel(g,S):(editing()&&S.ended?`<div class="card pad row"><span class="muted small" style="flex:1">試合終了の記録を取り消すと再開できます。</span><button class="btn ghost" data-act="undo">取り消し</button></div>`:'');
@@ -523,13 +541,17 @@ function renderLive(g,S){
   if(started){const ni=S.ended?(S.log.length?S.log[S.log.length-1]:null):{inning:S.inning,half:S.half};
     if(ni){const nb=noteBlock(g,noteKey(ni.inning,ni.half),`${ni.inning}回${ni.half?'裏':'表'}`);if(nb)noteCard=`<div class="card pad">${nb}</div>`}}
   const uniBar=editing()?`<div class="card pad row" style="justify-content:space-between"><span class="small muted">背番号：${UNI[g.uniform||'1']}ユニフォーム</span><div class="seg" style="flex:0 0 auto">${['1','2'].map(u=>`<button aria-pressed="${(g.uniform||'1')===u}" data-act="uni" data-v="${u}"><img class="uimg" src="uni${u}.png" alt="" style="vertical-align:middle;margin-right:4px">${UNI[u]}</button>`).join('')}</div></div>`:'';
-  return sit+panel+noteCard+plays+uniBar;
+  const delBar=isOwner()&&scorer?`<div class="row" style="justify-content:flex-end"><button class="x" data-act="gamedel" data-v="${g.id}" style="color:var(--danger)">この試合のデータを削除</button></div>`:'';
+  return sit+panel+noteCard+plays+uniBar+delBar;
 }
 function playItem(e){
   const tag=`${e.inning}${e.half?'裏':'表'}`;
   const runs=e.runs?` <span class="run">${e.runs}点（${e.score[0]}-${e.score[1]}）</span>`:'';
-  if(e.kind==='pa')return `<li><span class="tag num">${tag}</span><span class="who">${esc(e.who)}</span><span class="txt">${esc(e.text)}${e.outsAfter&&e.outsAfter<=3&&['K','GO','FO','LO','DP','SAC','SF'].includes(e.code)?` <span class="muted small">${e.outsAfter}アウト</span>`:''}${runs}</span>${e.seq&&e.seq.length?`<span class="seq">${e.seq.map((k,i)=>`<span class="pc ${k}" title="${({B:'ボール',S:'見逃し',W:'空振り',F:'ファウル',X:'打球'})[k]}">${i+1}</span>`).join('')}</span>`:''}</li>`;
-  return `<li><span class="tag num">${tag}</span><span class="txt">${esc(e.text)}${runs}</span></li>`;
+  const ed=editing();const fx=ed?` class="fixable" data-act="fix" data-v="${e.ei}"`:'';
+  const pen=ed?'<span class="pen" aria-hidden="true">訂正</span>':'';
+  const KN={B:'ボール',S:'見逃し',W:'空振り',F:'ファウル',X:'打球'};
+  if(e.kind==='pa')return `<li${fx}><span class="tag num">${tag}</span><span class="who">${esc(e.who)}${pen}</span><span class="txt">${esc(e.text)}${e.outsAfter&&e.outsAfter<=3&&['K','GO','FO','LO','DP','SAC','SF'].includes(e.code)?` <span class="muted small">${e.outsAfter}アウト</span>`:''}${runs}</span>${e.seq&&e.seq.length?`<span class="seq">${e.seq.map((k,i)=>ed&&e.seqIdx?`<button class="pc ${k} fixp" data-act="fix" data-v="${e.seqIdx[i]}" title="${KN[k]}">${i+1}</button>`:`<span class="pc ${k}" title="${KN[k]}">${i+1}</span>`).join('')}</span>`:''}</li>`;
+  return `<li${fx}><span class="tag num">${tag}</span><span class="txt">${esc(e.text)}${runs}${pen}</span></li>`;
 }
 function inputPanel(g,S){
   const fieldingUs=S.half!==S.usHalf;
@@ -647,6 +669,14 @@ function renderRoster(){
 }
 
 /* ---------- sheets ---------- */
+const FN=['','投','捕','一','二','三','遊','左','中','右'];
+function fpad(f,presets){
+  return `<div class="lbl" style="margin:0">守備の流れ（例：6-4-3）</div>
+  <div class="fseq num">${f.length?f.join('<span>-</span>'):'<span class="muted" style="font-size:16px">番号をタップ</span>'}</div>
+  <div class="fpad">${[1,2,3,4,5,6,7,8,9].map(n=>`<button data-act="fp" data-v="${n}"><b>${n}</b><small>${FN[n]}</small></button>`).join('')}</div>
+  <div class="row"><button class="x" data-act="fpback">← 1つ消す</button><button class="x" data-act="fpclear">クリア</button></div>
+  <div class="dirs">${presets.map(x=>`<button class="chip" data-act="fppre" data-v="${x}">${x}</button>`).join('')}</div>`;
+}
 function benchOf(g,S){const used=new Set();S.hist.forEach(h=>h.forEach(p=>used.add(p.pid)));if(S.usP)used.add(S.usP);
   return team.players.filter(p=>!used.has(p.id)).sort((a,b)=>(+a.num||999)-(+b.num||999))}
 function pickList(players,act,extra=''){return players.length?`<div class="pick">${players.map(p=>`<button data-act="${act}" data-v="${p.id}" ${extra}><span class="no num">${esc(numFor(p,cur()))}</span>${esc(p.name)}</button>`).join('')}</div>`:'<p class="muted small">控えの選手がいません。名簿に追加してください。</p>'}
@@ -669,8 +699,48 @@ function renderSheet(g,S){
     <div class="res" style="grid-template-columns:repeat(2,1fr)">
       <button class="rb" data-act="run" data-to="out" data-why="CS">盗塁死</button>
       <button class="rb" data-act="run" data-to="out" data-why="PO">牽制死・走塁死</button></div>
+    <button class="btn ghost" data-act="rdopen">挟殺プレー（ランダウン）を記録する</button>
     ${r.us?`<button class="btn ghost" data-act="open" data-v="pr">代走を出す</button>`:''}
     <p class="small muted" style="margin:0">前の塁に走者がいるときは、その走者も押し出されて進みます。打席の直後に「進塁」で入った得点は、その打者の打点になります。</p>`;
+  }else if(sheet.type==='fix'){
+    const ev=g.events[sheet.ei];if(!ev){sheet=null;return''}
+    const le=S.log.find(l=>l.ei===sheet.ei);
+    const KN={B:'ボール',S:'見逃し',W:'空振り',F:'ファウル'};
+    if(ev.t==='p'){
+      body=`<h3>1球の訂正</h3><p class="small muted" style="margin:0">いまの判定：${KN[ev.k]}${le&&le.kind==='pa'?`（この球で ${esc(le.text)}）`:''}</p>
+      <div class="cnt">${Object.entries(KN).map(([k,l])=>`<button class="big ${k}" data-act="fixk" data-v="${k}" ${ev.k===k?'style="outline:3px solid var(--ink)"':''}>${l}</button>`).join('')}</div>
+      <button class="btn ghost" data-act="fixdel" style="color:var(--danger)">この1球を削除</button>`;
+    }else if(ev.t==='pa'){
+      body=`<h3>打席結果の訂正</h3><p style="margin:0"><b>${esc(le?le.who:'')}</b>　${esc(le?le.text:'')}</p>
+      <div class="lbl" style="margin:0">正しい結果をタップ（すぐ反映されます）</div>
+      <div class="res">${RES.map(([c,l,k])=>`<button class="rb ${k||''}" data-act="fixc" data-v="${c}" ${ev.c===c?'style="outline:3px solid var(--ink)"':''}>${l}</button>`).join('')}</div>
+      <div class="lbl" style="margin:0">打球方向</div>
+      <div class="dirs">${Object.keys(FIELD).map(d=>`<button class="chip" aria-pressed="${ev.d===d}" data-act="fixd" data-v="${d}">${d}</button>`).join('')}</div>
+      <div class="dirs">${Object.keys(ZONE).map(d=>`<button class="chip" aria-pressed="${ev.d===d}" data-act="fixd" data-v="${d}">${ZONE[d]}</button>`).join('')}<button class="chip" data-act="fixd" data-v="">なし</button></div>
+      <button class="btn ghost" data-act="fixdel" style="color:var(--danger)">この打席の結果を削除</button>
+      <p class="small muted" style="margin:0">後の打席や得点はすべて自動で計算し直します。</p>`;
+    }else{
+      body=`<h3>記録の訂正</h3><p style="margin:0">${esc(le?le.text:'')}</p>
+      <button class="btn ghost" data-act="fixdel" style="color:var(--danger)">この記録を削除</button>
+      <p class="small muted" style="margin:0">削除してから、正しい内容を入力し直してください。後の記録は自動で計算し直します。</p>`;
+    }
+  }else if(sheet.type==='dp'){
+    const o=sheet.o;const cnt=o.length;
+    const who=[['b',`打者 ${esc(S.batter?S.rname(S.batter):'')}`]].concat([0,1,2].filter(i=>S.bases[i]).map(i=>[i,`${BASEN[i]}走者 ${esc(S.rname(S.bases[i]))}`]));
+    body=`<h3>${cnt>=3?'三重殺（トリプルプレー）':'併殺（ゲッツー）'}</h3>
+    <div class="lbl" style="margin:0">アウトになった人（${cnt}人）</div>
+    <div class="res" style="grid-template-columns:1fr">${who.map(([k,l])=>`<button class="rb ${o.includes(k)?'hit':''}" data-act="dpo" data-v="${k}">${o.includes(k)?'✓ ':''}${l}</button>`).join('')}</div>
+    ${fpad(sheet.f,['6-4-3','4-6-3','5-4-3','1-6-3','3-6-3','6-3','4-3','5-4','6-4'])}
+    <button class="btn" data-act="dpsave" ${cnt<2?'disabled style="opacity:.5"':''}>${cnt>=3?'三重殺':'併殺'}を記録${sheet.f.length?`（${sheet.f.join('-')}）`:''}</button>
+    <p class="small muted" style="margin:0">アウトにならなかった走者は、そのままの塁に残ります。違うときは記録後に走者をタップして直せます。</p>`;
+  }else if(sheet.type==='rd'){
+    const i=sheet.base,r=S.bases[i];if(!r){sheet=null;return''}
+    const btw=['一二塁間','二三塁間','三本間'][i];
+    const opts=[['out','タッチアウト'],['back',`${BASEN[i]}に戻ってセーフ`],['next',i===2?'本塁に生還（セーフ）':`${BASEN[i+1]}に進んでセーフ`]];
+    body=`<h3>挟殺プレー　${btw}</h3><p class="small muted" style="margin:0">${BASEN[i]}走者 ${esc(S.rname(r))}</p>
+    ${fpad(sheet.f,i===2?['2-5','2-5-2','5-2','1-2-5']:i===1?['6-5','4-5','5-6','1-6-5']:['3-6','3-4','4-3','1-3-6'])}
+    <div class="lbl" style="margin:0">結果</div>
+    <div class="res" style="grid-template-columns:1fr">${opts.map(([k,l])=>`<button class="rb ${k==='out'?'hit':''}" data-act="rdsave" data-v="${k}">${l}</button>`).join('')}</div>`;
   }else if(sheet.type==='pr'){
     const r=S.bases[sheet.base];const slot=r?S.lineup.findIndex(x=>x.pid===r.pid):-1;
     body=`<h3>代走　${r?esc(S.rname(r)):''} に代えて</h3>${pickList(benchOf(g,S),'dosub',`data-slot="${slot}" data-kind="代走"`)}`;
@@ -712,9 +782,28 @@ document.addEventListener('click',ev=>{
     case'tab':tab=v;sheet=null;render();window.scrollTo(0,0);break;
     case'p':push({t:'p',k:v});break;
     case'dir':dirSel=dirSel===v?null:v;render();break;
-    case'pa':push({t:'pa',c:v,d:dirSel||null});dirSel=null;render();break;
+    case'pa':if(v==='DP'){const S=replay(g);const o=['b'];const lead=S.bases[0]?0:[2,1,0].find(i=>S.bases[i]);if(lead!=null)o.push(lead);
+        const pre={遊:['6','4','3'],二:['4','6','3'],三:['5','4','3'],投:['1','6','3'],一:['3','6','3'],捕:['2','6','3']}[dirSel]||[];
+        sheet={type:'dp',o,f:pre,d:dirSel||null};render();break}
+      push({t:'pa',c:v,d:dirSel||null});dirSel=null;render();break;
+    case'dpo':{const k=v==='b'?'b':+v;sheet.o=sheet.o.includes(k)?sheet.o.filter(x=>x!==k):sheet.o.concat([k]);render();break}
+    case'dpsave':if(sheet.o.length<2){toast('アウトを2人以上選んでください');break}push({t:'pa',c:'DP',d:sheet.d,o:sheet.o,f:sheet.f.join('-')});dirSel=null;sheet=null;render();toast('記録しました');break;
+    case'fp':if(sheet.f.length<8)sheet.f.push(v);render();break;
+    case'fpback':sheet.f.pop();render();break;
+    case'fpclear':sheet.f=[];render();break;
+    case'fppre':sheet.f=v.split('-');render();break;
+    case'rdopen':sheet={type:'rd',base:sheet.base,f:[]};render();break;
+    case'rdsave':{const i=sheet.base;const to=v==='out'?'out':v==='back'?i:i+1;push({t:'run',base:i,to:to===3?'home':to,why:'RD',f:sheet.f.join('-')});sheet=null;render();break}
     case'undo':undo();break;
     case'runner':sheet={type:'runner',base:+v};render();break;
+    case'fix':sheet={type:'fix',ei:+v};render();break;
+    case'fixk':fixEdit(ev=>{ev.k=v},'判定を訂正しました');break;
+    case'fixc':fixEdit(ev=>{ev.c=v;if(v!=='DP'){delete ev.o;delete ev.f}},'打席結果を訂正しました');break;
+    case'fixd':{const gm=cur();const ev=gm.events[sheet.ei];ev.d=v||null;gm.updatedAt=Date.now();saveGame(gm.id);render();break}
+    case'fixdel':{const gm=cur();const ei=sheet.ei;const old=gm.events[ei];gm.events.splice(ei,1);gm.updatedAt=Date.now();saveGame(gm.id);sheet=null;render();
+      const gid=gm.id;toastUndo('削除しました',()=>{const g2=games[gid];if(!g2)return;g2.events.splice(ei,0,old);g2.updatedAt=Date.now();saveGame(gid);render()});break}
+    case'toastundo':if(undoFn){const f=undoFn;undoFn=null;f();toast('元に戻しました')}break;
+    case'gamedel':sheet={type:'delgame',gid:v};render();break;
     case'runwhy':sheet.why=v;render();break;
     case'run':push({t:'run',base:sheet.base,to:el.dataset.to,why:el.dataset.why});sheet=null;render();break;
     case'open':sheet={type:v,base:sheet&&sheet.base,gid:el.dataset.g};render();break;
