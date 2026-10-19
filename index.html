@@ -421,6 +421,7 @@ function render(){
   const g=cur();const S=g?replay(g):null;
   app.innerHTML=renderTop(g,S)+`<main><div class="wrap">${renderBody(g,S)}</div></main>`+(sheet?renderSheet(g,S):'');
   for(const id in keep){const el=document.getElementById(id);if(!el||el.dataset.keep==='no')continue;if(el.dataset.draft==='1'?el.value!==keep[id]:(el.value===''&&keep[id]))el.value=keep[id]}
+  dhToggle();
 }
 function renderTop(g,S){
   let head='',ls='';
@@ -602,7 +603,8 @@ function newGameForm(){
     <div class="row"><label class="f">ユニフォーム<select id="ng_uni"><option value="1">ファースト（公式）</option><option value="2">セカンド</option></select></label></div>
     <div class="lbl" style="margin:4px 0 0">スターティングメンバー</div>
     <div class="lu">${lu}</div>
-    <p class="small muted" style="margin:0">守備位置が「投」の選手が先発投手になります。</p>
+    <div id="ng_sprow" class="row" hidden><label class="f">先発投手（指名打者を使うとき）<select id="ng_sp">${opts()}</select></label></div>
+    <p class="small muted" style="margin:0" id="ng_sphint">守備位置が「投」の選手が先発投手になります。指名打者（指）を入れたときは、打順に入らない先発投手を下で選べます。</p>
     <button class="btn" type="submit">試合を作って速報を始める</button>
   </form></details>`;
 }
@@ -734,6 +736,7 @@ document.addEventListener('change',ev=>{
   const el=ev.target;
   if(el.id==='scorerSw'){scorer=el.checked;lsSet('scorer',scorer?'1':'0');render()}
   if(el.id==='sb_slot'&&sheet){sheet.slot=+el.value;sheet.pos=null;render()}
+  if(/^lp\d$/.test(el.id))dhToggle();
 });
 function addPlayer(g,pid){if(!g.players[pid]){const p=team.players.find(x=>x.id===pid);if(p)g.players[pid]={num:numFor(p,g),name:p.name}}}
 function syncGameNums(pl){Object.values(games).forEach(gm=>{if(gm.players&&gm.players[pl.id]&&!replay(gm).ended){gm.players[pl.id]={num:numFor(pl,gm),name:pl.name};saveGame(gm.id)}})}
@@ -761,7 +764,16 @@ document.addEventListener('submit',ev=>{
     const lineup=[];const seen=new Set();
     for(let i=0;i<9;i++){const pid=document.getElementById('lu'+i).value;const pos=document.getElementById('lp'+i).value;
       if(!pid){toast(`${i+1}番の選手を選んでください`);return}if(seen.has(pid)){toast('同じ選手が2回選ばれています');return}seen.add(pid);lineup.push({pid,pos})}
-    const sp=lineup.find(x=>x.pos==='投');if(!sp){toast('守備位置「投」の選手を1人入れてください');return}
+    const pIn=lineup.filter(x=>x.pos==='投');const hasDH=lineup.some(x=>x.pos==='指');
+    if(pIn.length>1){toast('守備位置「投」が2人います');return}
+    let sp=pIn[0];
+    if(!sp){
+      if(!hasDH){toast('守備位置「投」の選手を入れるか、指名打者（指）を使う場合は先発投手を選んでください');return}
+      const spid=document.getElementById('ng_sp').value;
+      if(!spid){toast('先発投手を選んでください');document.getElementById('ng_sp').focus();return}
+      if(seen.has(spid)){toast('先発投手は打順に入っていない選手を選んでください');return}
+      sp={pid:spid};
+    }
     const uniform=document.getElementById('ng_uni').value;const players={};team.players.forEach(p=>players[p.id]={num:numFor(p,{uniform}),name:p.name});
     const id=uid();
     games[id]={id,createdAt:Date.now(),updatedAt:Date.now(),usName:team.name||'自チーム',opponent:opp,date:document.getElementById('ng_date').value,
@@ -985,6 +997,7 @@ async function resolveRole(user){
 
 /* ---------- boot ---------- */
 render();
+function dhToggle(){const row=document.getElementById('ng_sprow');if(!row)return;const pos=[...Array(9)].map((_,i)=>document.getElementById('lp'+i)?.value);row.hidden=!(pos.includes('指')&&!pos.includes('投'))}
 (function boot(){
   const cfg=window.FIREBASE_CONFIG;
   if(!window.firebase||!cfg||!cfg.apiKey||/ここに/.test(cfg.apiKey)){noDb=true;booted=true;render();return}
