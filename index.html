@@ -315,6 +315,14 @@ details[open]>summary .chev{border-top:0;border-bottom:7px solid var(--ink)}
 .abhead .nowpill{margin-left:0}
 .tail .plines{margin:8px 0 8px 32px}
 .plines .pdesc .pcnt{margin-left:4px}
+.rb-ban rect{fill:#13284B;stroke:#fff;stroke-width:1.5}
+.rb-ban.hit rect{fill:#F0802E}.rb-ban.walk rect{fill:#2FA866}
+.rb-big{font-size:19px;font-weight:800;fill:#fff;font-family:var(--f-body);letter-spacing:.02em}
+.rb-runs{fill:#FFE27A}
+.rb-sub{font-size:11.5px;font-weight:700;fill:#fff;paint-order:stroke;stroke:#13284B;stroke-width:3px;font-family:var(--f-body)}
+@media (prefers-reduced-motion:no-preference){.rb-ban.pop{animation:rbpop .35s ease-out}}
+@keyframes rbpop{from{transform:scale(.6);opacity:0}to{transform:none;opacity:1}}
+.rb-ban{transform-origin:150px -17px;transform-box:view-box}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -608,7 +616,7 @@ function noGame(){
   }
   return `<div class="card empty"><h3>まだ試合が始まっていません</h3><p class="muted">記録係が試合を作ると、ここにスコアとカウントが自動で表示されます。この画面を開いたままにしておけば、ほぼリアルタイムで更新されます。</p></div>`;
 }
-let fieldMode='runner';let ttSel=null;let lastAnim='';
+let fieldMode='runner';let lastBan='';let ttSel=null;let lastAnim='';
 const HX=150,HY=226;
 const fpt=(deg,r)=>[HX+r*Math.sin(deg*Math.PI/180),HY-r*Math.cos(deg*Math.PI/180)];
 const DIRA={三:[-36,72],遊:[-15,98],二:[15,98],一:[36,72],投:[0,46],捕:[0,14],左:[-30,150],中:[0,162],右:[30,150],三遊:[-25,92],二遊:[0,96],左中:[-15,165],右中:[15,165],返し:[0,64]};
@@ -629,6 +637,21 @@ function ballPath(code,dir,tt){
     d=`M${sx} ${sy} Q${(mx+nx*k).toFixed(1)} ${(my+ny*k).toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)}`}
   else d=`M${sx} ${sy} L${x.toFixed(1)} ${y.toFixed(1)}`;
   return {d,x,y,type};
+}
+const BIG={'1B':'ヒット！','IH':'内野安打！','2B':'ツーベース！','3B':'スリーベース！','HR':'ホームラン！！','BB':'フォアボール','HBP':'デッドボール','K':'三振','GO':'ゴロ','FO':'フライ','LO':'ライナー','DP':'ゲッツー','SAC':'送りバント','SF':'犠牲フライ','E':'エラー','FC':'野選'};
+function resultBanner(e){
+  const hit=HITS.includes(e.code),walk=['BB','HBP'].includes(e.code);
+  let big=BIG[e.code]||e.text;
+  if(['GO','FO','LO'].includes(e.code)&&e.dir&&FIELD[e.dir])big=e.text.replace(/（.*$/,'');
+  if(e.code==='K')big=/空振り/.test(e.text)?'空振り三振':/見逃し/.test(e.text)?'見逃し三振':'三振';
+  if(e.code==='DP'&&/三重殺/.test(e.text))big='トリプルプレー';
+  const runs=e.runs?`　${e.runs}点！`:'';
+  const who=surname(String(e.who).replace(/^相手(\d+)番$/,'相手$1番'));
+  let sub=`${who}　${e.text}`;if(sub.length>22)sub=sub.slice(0,21)+'…';
+  const cls=hit?'hit':walk?'walk':'out';const w=Math.min(290,Math.max(120,(big.length+runs.length)*19+30));
+  const bk=e.ei+':'+e.code;const pop=bk!==lastBan;lastBan=bk;
+  return `<g class="rb-ban ${cls} ${pop?'pop':''}"><rect x="${150-w/2}" y="-34" width="${w}" height="34" rx="17"/><text class="rb-big" x="150" y="-10" text-anchor="middle">${esc(big)}<tspan class="rb-runs">${esc(runs)}</tspan></text>
+    <text class="rb-sub" x="150" y="16" text-anchor="middle">${esc(sub)}</text></g>`;
 }
 function surname(n){return String(n||'').trim().split(/[\s　]+/)[0]}
 const POSXY={投:[150,192],捕:[150,244],一:[210,172],二:[196,134],遊:[104,134],三:[90,172],左:[70,84],中:[150,60],右:[230,84]};
@@ -658,6 +681,7 @@ function fieldSvg(g,S,tap){
   }else{
     // last batted ball
     const last=[...S.log].reverse().find(l=>l.kind==='pa');
+    if(last)over+=resultBanner(last);
     if(last&&last.dir){const bp=ballPath(last.code,last.dir,last.tt);
       if(bp){const key=last.ei+':'+last.code+':'+last.dir+':'+(last.tt||'');const anim=key!==lastAnim;lastAnim=key;
         over+=`<path class="f-ball ${bp.type==='G'?'g':''} ${anim&&bp.type!=='G'?'anim':''}" d="${bp.d}" pathLength="100"/><circle class="f-land ${HITS.includes(last.code)?'hit':''}" cx="${bp.x.toFixed(1)}" cy="${bp.y.toFixed(1)}" r="5"/>`}}
@@ -668,7 +692,7 @@ function fieldSvg(g,S,tap){
       <rect class="f-base ${on?'on':''}" x="${x-(on?8:4)}" y="${y-(on?8:4)}" width="${on?16:8}" height="${on?16:8}" transform="rotate(45 ${x} ${y})"/>
       ${on?`<text class="f-rn" x="${x+(i===0?0:i===2?0:0)}" y="${i===1?y-14:y+24}" text-anchor="middle">${esc(surname(nm(i)))}</text>`:''}</g>`}).join('');
   }
-  return `<svg class="field" viewBox="0 0 300 258" role="img" aria-label="${fieldMode==='pos'?'守備位置':'走者と打球'}">${ground}${over}</svg>`;
+  return `<svg class="field" viewBox="${fieldMode==='pos'?'0 0 300 258':'0 -38 300 296'}" role="img" aria-label="${fieldMode==='pos'?'守備位置':'走者と打球'}">${ground}${over}</svg>`;
 }
 function lamps(n,max,c){let s='';for(let i=0;i<max;i++)s+=`<span class="lamp ${c} ${i<n?'on':''}"></span>`;return s}
 function renderLive(g,S){
