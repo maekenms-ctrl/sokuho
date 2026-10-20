@@ -1155,9 +1155,9 @@ document.addEventListener('click',ev=>{
     case'mapcopy':{const gm=games[sheet.gid];if(!gm)break;(navigator.clipboard?navigator.clipboard.writeText(mapText(gm)):Promise.reject()).then(()=>toast('コピーしました')).catch(()=>toast('コピーできませんでした。「地図を開く」から共有してください'));break}
     case'plsel':sheet={type:'plsel',slot:+v};render();break;
     case'aball':abAll=v==='1';abOpen.clear();render();abAll=null;document.querySelectorAll('details[data-ab]').forEach(d=>{if(v==='1')abOpen.add(d.dataset.ab);else abOpen.add('x'+d.dataset.ab)});break;
-    case'shline':{const g2=cur();if(!g2)break;const txt=resultText(g2,replay(g2));location.href='https://line.me/R/share?text='+encodeURIComponent(txt);break}
+    case'shline':{const g2=(sheet&&sheet.gid&&games[sheet.gid])||cur();if(!g2)break;const txt=resultText(g2,replay(g2));location.href='https://line.me/R/share?text='+encodeURIComponent(txt);break}
     case'shmore':{const g2=cur();if(!g2)break;const txt=resultText(g2,replay(g2));if(navigator.share)navigator.share({text:txt}).catch(()=>{});else toast('この端末では使えません。「文章をコピー」を使ってください');break}
-    case'shcopy':{const g2=cur();if(!g2)break;const txt=resultText(g2,replay(g2));(navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>toast('コピーしました。LINEに貼り付けてください')).catch(()=>{const pre=document.querySelector('.shprev');if(pre){const r=document.createRange();r.selectNodeContents(pre);const sel=getSelection();sel.removeAllRanges();sel.addRange(r)}toast('文章を選択しました。長押しでコピーしてください')});break}
+    case'shcopy':{const g2=(sheet&&sheet.gid&&games[sheet.gid])||cur();if(!g2)break;const txt=resultText(g2,replay(g2));(navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>toast('コピーしました。LINEに貼り付けてください')).catch(()=>{const pre=document.querySelector('.shprev');if(pre){const r=document.createRange();r.selectNodeContents(pre);const sel=getSelection();sel.removeAllRanges();sel.addRange(r)}toast('文章を選択しました。長押しでコピーしてください')});break}
     case'dictopen':sheet={type:'dict',ins:v==='ins'};render();setTimeout(()=>document.getElementById('dq')?.focus(),60);break;
     case'dpick':{dictQ=v;render();break}
     case'dfav':{if(dfavs.includes(v))dfavs=dfavs.filter(x=>x!==v);else{dfavs.push(v);toast(`「${v}」をよく使う言葉に追加しました`)}saveFavs();if(!dfavs.length)favEdit=false;render();break}
@@ -1464,7 +1464,8 @@ function ginfoSheet(){
     <div class="row"><label class="f">グラウンド名<input id="gi_venue" value="${esc(gm.venue||'')}" data-keep="no"></label><label class="f">住所（地図用・任意）<input id="gi_addr" value="${esc(gm.addr||'')}" data-keep="no"></label></div>
     <div class="row"><label class="f">相手チーム<input id="gi_opp" value="${esc(gm.opponent||'')}" data-keep="no"></label><label class="f">日付<input id="gi_date" type="date" value="${esc(gm.date||'')}" data-keep="no"></label><label class="f">開始時間<input id="gi_time" type="time" value="${esc(gm.time||'')}" data-keep="no"></label></div>
     <button class="btn" type="submit">保存する</button></form></details>`:'';
-  return `<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true"><h3>試合情報</h3>${view}${form}<button class="btn ghost" data-act="close">閉じる</button></div></div>`;
+  const S2=replay(gm);const res=`<div class="lbl" style="margin:0">${S2.ended?'試合結果':'途中経過'}を共有</div><div class="row"><button class="btn line" data-act="shline">${S2.ended?'試合結果':'途中経過'}をLINEで送る</button><button class="btn ghost" data-act="shcopy">文章をコピー</button></div>`;
+  return `<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true"><h3>試合情報</h3>${view}${res}${form}<button class="btn ghost" data-act="close">閉じる</button></div></div>`;
 }
 function mapText(gm){return `【グラウンド】${gm.venue||''}${gm.tour?`\n${gm.tour}${gm.kind?`（${KIND[gm.kind]}）`:''}`:''}\n${gdate(gm)}　vs ${gm.opponent}${gm.addr?`\n${gm.addr}`:''}\n${mapUrl(gm)}`}
 
