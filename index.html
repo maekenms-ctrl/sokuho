@@ -146,6 +146,8 @@ h2{font-size:13px;letter-spacing:.06em;color:var(--muted);margin:0 0 8px;font-we
 .chip[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
 .res{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .rb{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:11px 2px;font-size:14px;font-weight:700;min-height:46px}
+.res.hits{grid-template-columns:repeat(5,1fr)}
+.res.hits .rb{font-size:13px;padding-inline:0}
 .rb.hit{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .rb.on{background:var(--soft)}
 .acts{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
@@ -205,7 +207,7 @@ textarea{min-height:120px}
 .fixable:active{background:var(--soft)}
 .pen{margin-left:8px;font-size:11px;font-weight:700;color:var(--accent);border:1px solid var(--accent);border-radius:99px;padding:0 6px;vertical-align:1px}
 button.pc{border:0;padding:0;cursor:pointer}
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:99px;font-size:14px;z-index:60;max-width:calc(100% - 32px)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top,0px));background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:99px;font-size:14px;z-index:60;max-width:calc(100% - 32px)}
 .modebar{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .switch{display:flex;gap:8px;align-items:center;font-size:13px;font-weight:700}
 .switch input{width:auto}
@@ -254,6 +256,28 @@ mark{background:var(--note-line);color:var(--ink);border-radius:3px;padding:0 2p
 .pstat>div:first-child{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 .pstat .ps{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
 .pstat .ps b{font-size:22px;color:var(--ink);margin-right:2px}
+.dres{display:flex;flex-direction:column;gap:0;max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:0 10px}
+.dterm{display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.dterm:first-child{border-top:0}
+.dins{padding:8px 12px;font-size:13px;flex:0 0 auto}
+.dheads{display:flex;flex-wrap:wrap;gap:4px}
+.dheads .chip{min-width:34px}
+.clist{display:flex;flex-direction:column;gap:8px}
+.crow{display:flex;gap:6px;justify-content:flex-end;margin-top:2px}
+.crow .x{padding:2px 6px}
+button{touch-action:manipulation;-webkit-user-select:none;user-select:none}
+.big,.rb,.ab,.dg,.chip,.btn,.pc{transition:transform .06s,filter .06s}
+.big:active,.rb:active,.ab:active,.dg:active,.chip:active,.btn:active{transform:scale(.95);filter:brightness(.9)}
+.dgrid{display:grid;grid-template-columns:repeat(9,1fr);gap:4px}
+.zgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+.zgrid .z{font-size:13px}
+.tgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.dg{border:1px solid var(--line);background:var(--surface);border-radius:8px;min-height:42px;font-weight:700;font-size:15px;padding:0}
+.dg[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.selsum{display:inline-flex;align-items:center;gap:4px;background:var(--ink);color:var(--surface);border-radius:99px;padding:2px 4px 2px 10px;font-size:12px;letter-spacing:0}
+.selsum .x{color:var(--surface);padding:0 6px}
+.undo1{border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:6px 12px;font-weight:700;font-size:13px;flex:0 0 auto}
+.big{min-height:64px;font-size:16px;padding-inline:0;white-space:nowrap;letter-spacing:-.02em}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -272,11 +296,11 @@ const PN=p=>({投:'ピッチャー',指:'指名打者'})[p]||FIELD[p]||p;
 const ZONE={三遊:'三遊間',二遊:'二遊間',左中:'左中間',右中:'右中間',返し:'センター返し'};
 const BASEN=['一塁','二塁','三塁'];
 const RES=[
- ['1B','安打','hit'],['2B','二塁打','hit'],['3B','三塁打','hit'],['HR','本塁打','hit'],
+ ['1B','安打','hit'],['IH','内野安打','hit'],['2B','二塁打','hit'],['3B','三塁打','hit'],['HR','本塁打','hit'],
  ['BB','四球'],['HBP','死球'],['K','三振'],['GO','ゴロ'],
  ['FO','フライ'],['LO','ライナー'],['DP','併殺'],['SAC','犠打'],
  ['SF','犠飛'],['E','失策'],['FC','野選']];
-const HITS=['1B','2B','3B','HR'];
+const HITS=['1B','IH','2B','3B','HR'];
 
 let db=null,auth=null,me=null,role='viewer',noDb=false,booted=false;
 let pendingWrites=false,offline=false,roles=[],unsubRoles=null;
@@ -296,6 +320,7 @@ function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 function uid(){return (crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2)).replace(/[^A-Za-z0-9_-]/g,'')}
 let toastT,undoFn=null;function toast(m){const t=document.getElementById('toast');t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2200)}
 function toastUndo(m,fn){undoFn=fn;const t=document.getElementById('toast');t.innerHTML=`${esc(m)}<button data-act="toastundo">元に戻す</button>`;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>{t.hidden=true;undoFn=null},6000)}
+function toTop(){const c=document.getElementById('livecard');if(!c)return;const h=document.querySelector('.top')?.offsetHeight||0;const y=c.getBoundingClientRect().top+window.scrollY-h-8;window.scrollTo({top:y,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'})}
 function fixEdit(fn,msg){const gm=cur();const ev=gm.events[sheet.ei];if(!ev)return;const before=JSON.stringify(ev);fn(ev);gm.updatedAt=Date.now();saveGame(gm.id);const ei=sheet.ei;sheet=null;render();
   const gid=gm.id;toastUndo(msg,()=>{const g2=games[gid];if(!g2)return;g2.events[ei]=JSON.parse(before);g2.updatedAt=Date.now();saveGame(gid);render()})}
 
@@ -343,7 +368,7 @@ function replay(g){
     const advAll=n=>{for(let i=2;i>=0;i--)if(b[i]){const t=i+n;if(t>=3)runs.push(b[i]);else nb[t]=b[i]}};
     const force=()=>{nb=b.slice();if(nb[0]){if(nb[1]){if(nb[2])runs.push(nb[2]);nb[2]=nb[1]}nb[1]=nb[0]}nb[0]=br};
     switch(code){
-      case'1B':advAll(1);nb[0]=br;break;
+      case'1B':case'IH':advAll(1);nb[0]=br;break;
       case'2B':advAll(2);nb[1]=br;break;
       case'3B':advAll(3);nb[2]=br;break;
       case'HR':advAll(3);runs.push(br);break;
@@ -449,6 +474,7 @@ function resText(code,dir,kind){
   const to=dir==='返し'?'の':'への';
   switch(code){
     case'1B':return f?`${f}${to}ヒット`:'ヒット';
+    case'IH':return f?(z?`${f}${to}内野安打`:`${f}への内野安打`):'内野安打';
     case'2B':return f?`${f}${to}ツーベース`:'ツーベースヒット';
     case'3B':return f?`${f}${to}スリーベース`:'スリーベースヒット';
     case'HR':return f?`${f}${to}ホームラン`:'ホームラン';
@@ -548,9 +574,10 @@ function ballPath(code,dir,tt){
   if(code==='HR')r=212;
   else if(code==='3B')r=Math.max(r,inf?168:174);
   else if(code==='2B')r=inf?160:Math.max(r,168);
+  else if(code==='IH')r=inf?r:Math.min(r,100);
   else if(code==='1B')r=inf?(dir==='投'||dir==='捕'?r:128):Math.min(r,122);
   else if((code==='FO'||code==='SF')&&inf)r=Math.max(r,dir==='捕'?30:r);
-  const type=tt||({GO:'G',DP:'G',FC:'G',SAC:'G',E:'G',LO:'L',FO:'F',SF:'F',HR:'F',1:'G'})[code]||(code==='1B'?(inf?'G':'L'):'L');
+  const type=tt||({IH:'G',GO:'G',DP:'G',FC:'G',SAC:'G',E:'G',LO:'L',FO:'F',SF:'F',HR:'F',1:'G'})[code]||(code==='1B'?(inf?'G':'L'):'L');
   const [x,y]=fpt(deg,r);const sx=HX,sy=HY-4;
   let d;
   if(type==='F'){const mx=(sx+x)/2,my=(sy+y)/2,len=Math.hypot(x-sx,y-sy);const nx=-(y-sy)/len,ny=(x-sx)/len;const k=len*0.42*(deg>0?-1:1)*(deg===0?-1:1);
@@ -621,7 +648,8 @@ function renderLive(g,S){
       <div><div class="k" style="display:flex;justify-content:space-between;align-items:center">投手${ed?`<button class="x" data-act="open" data-v="${pk.startsWith('u:')?'pitcher':'opppitcher'}" style="padding:0;color:var(--accent);font-weight:700">交代 ›</button>`:''}</div><div class="v">${esc(pName)}</div><div class="np">${P.np}<span>球</span></div></div></div>`;
     const cnt=`<div class="cnt"><button class="big B" data-act="p" data-v="B">ボール</button><button class="big S" data-act="p" data-v="S">見逃し</button><button class="big W" data-act="p" data-v="W">空振り</button><button class="big F" data-act="p" data-v="F">ファウル</button></div>`;
     const field=`<div class="fieldwrap ${ed?'ed':''}">${fieldMode==='pos'?`<div class="small muted" style="text-align:center;margin-bottom:2px">${esc(g.usName)}の守備位置</div>`:''}${fieldSvg(g,S,ed&&fieldMode==='runner')}</div>`;
-    sit=ed?`<div class="card pad stack">${head}${cnt}${seq}${mu}${field}</div>`:`<div class="card pad stack">${head}${seq}${mu}${field}</div>`;
+    const seqRow=`<div class="row" style="justify-content:space-between;flex-wrap:nowrap;min-height:28px">${seq||'<span class="small muted">この打席の投球はまだありません</span>'}<button class="undo1" data-act="undo">↶ 1つ戻す</button></div>`;
+    sit=ed?`<div class="card pad stack" id="livecard">${head}${cnt}${seqRow}${mu}${field}</div>`:`<div class="card pad stack">${head}${seq}${mu}${field}</div>`;
   }
   const panel=editing()&&!S.ended?inputPanel(g,S):(editing()&&S.ended?`<div class="card pad row"><span class="muted small" style="flex:1">試合終了の記録を取り消すと再開できます。</span><button class="btn ghost" data-act="undo">取り消し</button></div>`:'');
   const recent=S.log.slice(-6).reverse();
@@ -629,7 +657,9 @@ function renderLive(g,S){
   const plays=`<div class="card pad"><h2 style="display:flex;justify-content:space-between;gap:8px"><span>最新の経過</span>${upd?`<span style="font-weight:500;letter-spacing:0">最終更新 ${upd.getHours()}:${String(upd.getMinutes()).padStart(2,'0')}</span>`:''}</h2>${recent.length?`<ul class="plays">${recent.map(playItem).join('')}</ul>`:`<p class="muted small">${started?'':'プレイボール前です。'}最初の打席の結果がここに出ます。</p>`}</div>`;
   let noteCard='';
   if(started){const ni=S.ended?(S.log.length?S.log[S.log.length-1]:null):{inning:S.inning,half:S.half};
-    if(ni){const nb=noteBlock(g,noteKey(ni.inning,ni.half),`${ni.inning}回${ni.half?'裏':'表'}`);if(nb)noteCard=`<div class="card pad">${nb}</div>`}}
+    if(ni){const key=noteKey(ni.inning,ni.half),label=`${ni.inning}回${ni.half?'裏':'表'}`;const cl=commentList(g,key,true);
+      if(editing())noteCard=`<div class="card pad stack">${composer(key,label)}${cl}</div>`;
+      else if(cl)noteCard=`<div class="card pad"><h2>${label}　記録係のコメント</h2>${cl}</div>`}}
   const uniBar=editing()?`<div class="card pad row" style="justify-content:space-between"><span class="small muted">背番号：${UNI[g.uniform||'1']}ユニフォーム</span><div class="seg" style="flex:0 0 auto">${['1','2'].map(u=>`<button aria-pressed="${(g.uniform||'1')===u}" data-act="uni" data-v="${u}"><img class="uimg" src="uni${u}.png" alt="" style="vertical-align:middle;margin-right:4px">${UNI[u]}</button>`).join('')}</div></div>`:'';
   const delBar=isOwner()&&scorer?`<div class="row" style="justify-content:flex-end"><button class="x" data-act="gamedel" data-v="${g.id}" style="color:var(--danger)">この試合のデータを削除</button></div>`:'';
   return sit+panel+noteCard+plays+uniBar+delBar;
@@ -646,13 +676,13 @@ function playItem(e){
 function inputPanel(g,S){
   const fieldingUs=S.half!==S.usHalf;
   return `<section class="card pad panel" aria-label="記録入力">
-    <div class="lbl">打球方向（任意・先に選ぶ）</div>
-    <div class="dirs">${Object.keys(FIELD).map(d=>`<button class="chip" aria-pressed="${dirSel===d}" data-act="dir" data-v="${d}">${d}</button>`).join('')}</div>
-    <div class="dirs">${Object.keys(ZONE).map(d=>`<button class="chip" aria-pressed="${dirSel===d}" data-act="dir" data-v="${d}">${ZONE[d]}</button>`).join('')}</div>
-    <div class="lbl">打球の種類（任意・ヒットのとき便利）</div>
-    <div class="dirs">${[['G','ゴロ'],['L','ライナー'],['F','フライ']].map(([k,l])=>`<button class="chip" aria-pressed="${ttSel===k}" data-act="tt" data-v="${k}">${l}</button>`).join('')}</div>
+    <div class="lbl" style="display:flex;justify-content:space-between;align-items:center;margin:0"><span>打球（任意・先に選ぶ）</span>${dirSel||ttSel?`<span class="selsum">${esc([dirSel?(ZONE[dirSel]||FIELD[dirSel]):'',ttSel?{G:'ゴロ',L:'ライナー',F:'フライ'}[ttSel]:''].filter(Boolean).join('・'))}<button class="x" data-act="dirclear">×</button></span>`:''}</div>
+    <div class="dgrid">${['投','捕','一','二','三','遊','左','中','右'].map(d=>`<button class="dg" aria-pressed="${dirSel===d}" data-act="dir" data-v="${d}">${d}</button>`).join('')}</div>
+    <div class="zgrid">${Object.keys(ZONE).map(d=>`<button class="dg z" aria-pressed="${dirSel===d}" data-act="dir" data-v="${d}">${d==='返し'?'中返し':ZONE[d]}</button>`).join('')}</div>
+    <div class="tgrid">${[['G','ゴロ'],['L','ライナー'],['F','フライ']].map(([k,l])=>`<button class="dg" aria-pressed="${ttSel===k}" data-act="tt" data-v="${k}">${l}</button>`).join('')}</div>
     <div class="lbl">打席結果</div>
-    <div class="res">${RES.map(([c,l,k])=>`<button class="rb ${k||''}" data-act="pa" data-v="${c}">${l}</button>`).join('')}</div>
+    <div class="res hits">${RES.filter(r=>r[2]).map(([c,l,k])=>`<button class="rb ${k||''}" data-act="pa" data-v="${c}">${l}</button>`).join('')}</div>
+    <div class="res">${RES.filter(r=>!r[2]).map(([c,l,k])=>`<button class="rb ${k||''}" data-act="pa" data-v="${c}">${l}</button>`).join('')}</div>
     <div class="acts">
       <button class="ab" data-act="open" data-v="${fieldingUs?'pitcher':'opppitcher'}">投手交代</button>
       <button class="ab" data-act="open" data-v="sub">選手交代</button>
@@ -683,10 +713,11 @@ function renderLog(g,S){
   const grp=(inning,half)=>{const k=noteKey(inning,half);return map[k]||(map[k]={k,inning,half,items:[]})};
   S.log.forEach(e=>grp(e.inning,e.half).items.push(e));
   Object.keys(g.notes||{}).forEach(k=>{const [i,h]=k.split('_').map(Number);grp(i,h)});
+  Object.values(g.cmts||{}).forEach(c=>{if(c&&c.k){const [i,h]=c.k.split('_').map(Number);grp(i,h)}});
   if(editing()&&g.events&&g.events.length&&!S.ended)grp(S.inning,S.half);
   const groups=Object.values(map).sort((x,y)=>(y.inning-x.inning)||(y.half-x.half));
   if(!groups.length)return `<div class="card empty"><p class="muted">まだ記録がありません。</p></div>`;
-  return groups.map(gr=>{const label=`${gr.inning}回${gr.half?'裏':'表'}`;const nb=noteBlock(g,gr.k,label);
+  return groups.map(gr=>{const label=`${gr.inning}回${gr.half?'裏':'表'}`;const nb=commentList(g,gr.k,false);
     return `<div class="card"><div class="half">${label}　${esc(gr.half?b:t)}の攻撃</div><div class="pad" style="padding-top:8px;display:flex;flex-direction:column;gap:8px">${nb}${gr.items.length?`<ul class="plays">${gr.items.slice().reverse().map(playItem).join('')}</ul>`:''}</div></div>`}).join('');
 }
 function ipStr(o){return Math.floor(o/3)+(o%3?'.'+o%3:'')}
@@ -774,6 +805,7 @@ function benchOf(g,S){const used=new Set();S.hist.forEach(h=>h.forEach(p=>used.a
 function pickList(players,act,extra=''){return players.length?`<div class="pick">${players.map(p=>`<button data-act="${act}" data-v="${p.id}" ${extra}><span class="no num">${esc(numFor(p,cur()))}</span>${esc(p.name)}</button>`).join('')}</div>`:'<p class="muted small">控えの選手がいません。名簿に追加してください。</p>'}
 function renderSheet(g,S){
   if(sheet.type==='login')return loginSheet();
+  if(sheet.type==='dict')return dictSheet();
   let body='';
   if(!g||!S){sheet=null;return''}
   if(sheet.type==='runner'){
@@ -889,6 +921,7 @@ function renderSheet(g,S){
 document.addEventListener('click',ev=>{
   const el=ev.target.closest('[data-act]');if(!el)return;
   const a=el.dataset.act,v=el.dataset.v;
+  if(['p','pa','dir','tt','run','fp','dpsave','undo'].includes(a)){try{navigator.vibrate&&navigator.vibrate(a==='pa'?18:8)}catch(e){}}
   if(a==='scrim'){if(ev.target===el){sheet=null;render()}return}
   if(a==='scorer'||a==='subslot')return;
   const g=cur();
@@ -897,12 +930,13 @@ document.addEventListener('click',ev=>{
     case'p':push({t:'p',k:v});break;
     case'dir':dirSel=dirSel===v?null:v;render();break;
     case'tt':ttSel=ttSel===v?null:v;render();break;
+    case'dirclear':dirSel=null;ttSel=null;render();break;
     case'pa':if(v==='DP'){const S=replay(g);const o=['b'];const lead=S.bases[0]?0:[2,1,0].find(i=>S.bases[i]);if(lead!=null)o.push(lead);
         const pre={遊:['6','4','3'],二:['4','6','3'],三:['5','4','3'],投:['1','6','3'],一:['3','6','3'],捕:['2','6','3']}[dirSel]||[];
         sheet={type:'dp',o,f:pre,d:dirSel||null};render();break}
-      push(Object.assign({t:'pa',c:v,d:dirSel||null},ttSel?{tt:ttSel}:{}));dirSel=null;ttSel=null;render();break;
+      push(Object.assign({t:'pa',c:v,d:dirSel||null},ttSel?{tt:ttSel}:{}));dirSel=null;ttSel=null;render();toTop();break;
     case'dpo':{const k=v==='b'?'b':+v;sheet.o=sheet.o.includes(k)?sheet.o.filter(x=>x!==k):sheet.o.concat([k]);render();break}
-    case'dpsave':if(sheet.o.length<2){toast('アウトを2人以上選んでください');break}push({t:'pa',c:'DP',d:sheet.d,o:sheet.o,f:sheet.f.join('-')});dirSel=null;sheet=null;render();toast('記録しました');break;
+    case'dpsave':setTimeout(toTop,50);if(sheet.o.length<2){toast('アウトを2人以上選んでください');break}push({t:'pa',c:'DP',d:sheet.d,o:sheet.o,f:sheet.f.join('-')});dirSel=null;sheet=null;render();toast('記録しました');break;
     case'fp':if(sheet.f.length<8)sheet.f.push(v);render();break;
     case'fpback':sheet.f.pop();render();break;
     case'fpclear':sheet.f=[];render();break;
@@ -912,6 +946,13 @@ document.addEventListener('click',ev=>{
     case'undo':undo();break;
     case'runner':sheet={type:'runner',base:+v};render();break;
     case'fmode':fieldMode=v;render();break;
+    case'dictopen':sheet={type:'dict',ins:v==='ins'};render();setTimeout(()=>document.getElementById('dq')?.focus(),60);break;
+    case'dhead':{dictQ=v;const q=document.getElementById('dq');if(q)q.value=v;const r=document.getElementById('dres');if(r)r.innerHTML=dictResults();break}
+    case'dins':{const box=document.getElementById('cbox');cDraft=(box?box.value:cDraft)+v;sheet=null;render();const b2=document.getElementById('cbox');if(b2){b2.focus();b2.setSelectionRange(b2.value.length,b2.value.length)}toast(`「${v}」を入れました`);break}
+    case'csend':sendComment(v);break;
+    case'cedit':{const g2=cur();const c=commentsFor(g2,el.dataset.k).find(x=>x.id===v);if(!c)break;cEdit=v;cEditKey=el.dataset.k;cDraft=c.t;tab='live';render();const b=document.getElementById('cbox');if(b){b.focus();b.scrollIntoView({block:'center'})}else toast('「速報」タブのコメント欄で訂正できます');break}
+    case'ccancel':cEdit=null;cEditKey=null;cDraft='';render();break;
+    case'cdel':delComment(v,el.dataset.k);break;
     case'fix':sheet={type:'fix',ei:+v};render();break;
     case'fixk':fixEdit(ev=>{ev.k=v},'判定を訂正しました');break;
     case'fixc':fixEdit(ev=>{ev.c=v;if(v!=='DP'){delete ev.o;delete ev.f}},'打席結果を訂正しました');break;
@@ -958,6 +999,10 @@ document.addEventListener('click',ev=>{
   }
 });
 document.addEventListener('keydown',ev=>{if((ev.key==='Enter'||ev.key===' ')&&ev.target.matches('g[data-act="runner"]')){ev.preventDefault();sheet={type:'runner',base:+ev.target.dataset.v};render()}});
+document.addEventListener('input',ev=>{const el=ev.target;
+  if(el.id==='cbox')cDraft=el.value;
+  if(el.id==='dq'){dictQ=el.value;const r=document.getElementById('dres');if(r)r.innerHTML=dictResults()}
+});
 document.addEventListener('change',ev=>{
   const el=ev.target;
   if(el.id==='scorerSw'){scorer=el.checked;lsSet('scorer',scorer?'1':'0');render()}
@@ -1140,6 +1185,53 @@ function renderRules(){
     <a class="lk" href="https://www.littlesenior.jp/" target="_blank" rel="noopener">日本リトルシニア中学硬式野球協会 公式サイト<small>↗</small></a></div>
     <p class="small muted" style="margin:8px 0 0">規程は年度ごとに改定されます。判断に迷うときは、必ず最新の規程集と大会要項で確認してください。</p></div>`;
 }
+
+const DICT=[["アウトカウント", "あうとかうんと", "そのイニングのアウトの数"], ["アウトコース", "あうとこーす", "打者から遠い外角のコース"], ["アピールプレー", "あぴーるぷれー", "守備側が審判にアピールして初めてアウトになるプレー（リタッチや塁の踏み忘れなど）"], ["悪送球", "あくそうきゅう", "それて捕れない送球"], ["アンダースロー", "あんだーすろー", "下手投げ"], ["一死", "いっし", "ワンアウト"], ["一塁打", "いちるいだ", "シングルヒット"], ["イニング", "いにんぐ", "回。表と裏で1イニング"], ["インコース", "いんこーす", "打者に近い内角のコース"], ["インフィールドフライ", "いんふぃーるどふらい", "無死・一死で走者一二塁か満塁のときの内野フライ。宣告されると打者アウト"], ["ウエスト", "うえすと", "盗塁やスクイズを警戒して、わざと大きく外す球"], ["打ち取る", "うちとる", "打者を凡打に仕留めること"], ["エラー", "えらー", "失策"], ["エンタイトルツーベース", "えんたいとるつーべーす", "ワンバウンドでフェンスを越えた打球などで与えられる二塁打"], ["エンドラン", "えんどらん", "投球と同時に走者がスタートし、打者が必ず打つ作戦"], ["押し出し", "おしだし", "満塁で四死球を与え、1点が入ること"], ["オーバースロー", "おーばーすろー", "上手投げ"], ["外角", "がいかく", "アウトコース"], ["外野手", "がいやしゅ", "レフト・センター・ライト"], ["カウント", "かうんと", "ボールとストライクの数"], ["勝ち越し", "かちこし", "同点から1点以上リードすること"], ["カットボール", "かっとぼーる", "小さく鋭く曲がる速い球"], ["カーブ", "かーぶ", "大きく曲がりながら落ちる変化球"], ["空振り", "からぶり", "バットに当たらなかったスイング。ストライクになる"], ["完全試合", "かんぜんじあい", "一人の走者も出さずに勝つこと"], ["完投", "かんとう", "1人の投手が最後まで投げきること"], ["完封", "かんぷう", "相手を無得点に抑えて勝つこと"], ["犠打", "ぎだ", "送りバント"], ["犠飛", "ぎひ", "犠牲フライ。捕球のあと三塁走者が生還する飛球"], ["逆転", "ぎゃくてん", "リードされていたチームが勝ち越すこと"], ["キャッチャー", "きゃっちゃー", "捕手"], ["救援", "きゅうえん", "リリーフ。途中からマウンドに上がる投手"], ["挟殺", "きょうさつ", "塁の間で走者を挟んでアウトにするプレー。ランダウン"], ["クイック", "くいっく", "走者がいるときの素早い投球動作"], ["クリーンナップ", "くりーんなっぷ", "3番・4番・5番打者"], ["クロスプレー", "くろすぷれー", "走者とタッチがきわどいプレー"], ["敬遠", "けいえん", "わざと四球を与えること"], ["牽制", "けんせい", "走者を刺すための塁への送球"], ["ゲッツー", "げっつー", "併殺。一度に2つのアウトを取ること"], ["好返球", "こうへんきゅう", "外野からの鋭い返球"], ["好走塁", "こうそうるい", "判断や足を生かしたうまい走塁"], ["後逸", "こういつ", "ボールを後ろにそらすこと"], ["コールドゲーム", "こーるどげーむ", "点差などの理由で途中で終了する試合"], ["ゴロ", "ごろ", "地面を転がる打球"], ["コントロール", "こんとろーる", "投球の制球力"], ["サイドスロー", "さいどすろー", "横手投げ"], ["サード", "さーど", "三塁手"], ["サヨナラ", "さよなら", "後攻チームが最終回以降に勝ち越して試合が終わること"], ["三者凡退", "さんしゃぼんたい", "3人で攻撃が終わること"], ["三振", "さんしん", "3ストライクでアウトになること"], ["残塁", "ざんるい", "攻撃が終わったときに塁に残った走者"], ["三塁打", "さんるいだ", "打者が三塁まで進んだ安打。スリーベース"], ["死球", "しきゅう", "デッドボール"], ["四球", "しきゅう", "フォアボール"], ["四死球", "ししきゅう", "四球と死球"], ["自責点", "じせきてん", "投手の責任とされる失点"], ["失策", "しっさく", "エラー"], ["指名打者", "しめいだしゃ", "DH。投手の代わりに打席に立つ打者"], ["シュート", "しゅーと", "利き腕の側に曲がりながら沈む変化球"], ["守備交代", "しゅびこうたい", "守っている選手の入れ替え"], ["守備妨害", "しゅびぼうがい", "攻撃側が守備を妨げること"], ["初球", "しょきゅう", "打席の1球目"], ["ショート", "しょーと", "遊撃手"], ["シングルヒット", "しんぐるひっと", "単打。一塁打"], ["申告敬遠", "しんこくけいえん", "投球せずに申告で四球にすること"], ["芯", "しん", "バットの最もよく飛ぶ部分"], ["スクイズ", "すくいず", "三塁走者を本塁に還すためのバント作戦"], ["スタメン", "すためん", "スターティングメンバー"], ["ストライク", "すとらいく", "ゾーンに入った球、空振り、ファウルなど"], ["ストライクゾーン", "すとらいくぞーん", "本塁上で、打者の膝から胸のあたりまでの範囲"], ["ストレート", "すとれーと", "直球"], ["スライダー", "すらいだー", "利き腕と反対側へ横に曲がる変化球"], ["スライディング", "すらいでぃんぐ", "塁に滑り込むこと"], ["スリーバント", "すりーばんと", "2ストライクからのバント。ファウルになると三振"], ["セカンド", "せかんど", "二塁手"], ["セットポジション", "せっとぽじしょん", "走者がいるときなどの投球姿勢"], ["セーフティバント", "せーふてぃばんと", "打者自身が一塁に生きるためのバント"], ["先制", "せんせい", "試合で最初に点を取ること"], ["選球眼", "せんきゅうがん", "ボール球を見極める力"], ["センター", "せんたー", "中堅手"], ["先頭打者", "せんとうだしゃ", "そのイニング最初の打者"], ["送球", "そうきゅう", "ボールを投げて渡すこと"], ["走者一掃", "そうしゃいっそう", "塁上の走者が全員生還すること"], ["走塁妨害", "そうるいぼうがい", "野手が走者の走塁を妨げること"], ["代走", "だいそう", "ピンチランナー"], ["代打", "だいだ", "ピンチヒッター"], ["タイブレーク", "たいぶれーく", "延長で走者を置いた状態から始める特別ルール"], ["タイムリー", "たいむりー", "得点が入る安打。適時打"], ["ダイビングキャッチ", "だいびんぐきゃっち", "飛び込んでの捕球"], ["タッチアップ", "たっちあっぷ", "飛球の捕球後に塁を踏み直してから次の塁を狙うこと"], ["打点", "だてん", "打撃によって入った得点の数"], ["打率", "だりつ", "安打数を打数で割った数字"], ["単打", "たんだ", "一塁打"], ["チェンジ", "ちぇんじ", "攻守交代"], ["チェンジアップ", "ちぇんじあっぷ", "直球と同じ腕の振りで投げる遅い球"], ["長打", "ちょうだ", "二塁打以上の安打"], ["直球", "ちょっきゅう", "ストレート"], ["追加点", "ついかてん", "リード中にさらに入る点"], ["ツーシーム", "つーしーむ", "打者の手元でわずかに動く速球"], ["ツーベース", "つーべーす", "二塁打"], ["詰まる", "つまる", "打球がバットの根元に当たること"], ["適時打", "てきじだ", "タイムリーヒット"], ["デッドボール", "でっどぼーる", "死球"], ["ディレードスチール", "でぃれーどすちーる", "タイミングをずらして行う盗塁"], ["同点", "どうてん", "得点が並ぶこと"], ["投球数", "とうきゅうすう", "投手が投げた球の数"], ["盗塁", "とうるい", "投球の間に走者が次の塁を奪うこと"], ["登板", "とうばん", "投手としてマウンドに上がること"], ["トリプルプレー", "とりぷるぷれー", "三重殺。一度に3つのアウトを取ること"], ["内角", "ないかく", "インコース"], ["ナイスバッティング", "ないすばってぃんぐ", "良い打撃をたたえる掛け声"], ["ナイスピッチ", "ないすぴっち", "好投をたたえる掛け声"], ["内野安打", "ないやあんだ", "内野で処理される間に打者が一塁に生きた安打"], ["内野ゴロ", "ないやごろ", "内野手へのゴロ"], ["流し打ち", "ながしうち", "逆方向へ打つこと"], ["二死", "にし", "ツーアウト"], ["二塁打", "にるいだ", "ツーベース"], ["粘る", "ねばる", "ファウルで粘って多くの球を投げさせること"], ["ノーアウト", "のーあうと", "無死"], ["ノーヒットノーラン", "のーひっとのーらん", "安打も得点も許さずに勝つこと"], ["バスター", "ばすたー", "バントの構えから打つ打法"], ["バックホーム", "ばっくほーむ", "本塁への送球"], ["バッテリー", "ばってりー", "投手と捕手"], ["バント", "ばんと", "バットに当てて転がす打法"], ["低め", "ひくめ", "ストライクゾーンの低いところ"], ["ピッチャー", "ぴっちゃー", "投手"], ["引っ張り", "ひっぱり", "打者の利き側へ強く打つこと"], ["ヒットエンドラン", "ひっとえんどらん", "エンドラン"], ["ファインプレー", "ふぁいんぷれー", "好守備"], ["ファウル", "ふぁうる", "ファウルラインの外に出た打球"], ["ファウルチップ", "ふぁうるちっぷ", "バットをかすって捕手が直接捕った球。ストライクになる"], ["ファースト", "ふぁーすと", "一塁手"], ["フィールダースチョイス", "ふぃーるだーすちょいす", "野選。野手が打者以外を狙い、全員がセーフになること"], ["フォアボール", "ふぉあぼーる", "四球"], ["フォーク", "ふぉーく", "打者の手元で落ちる変化球"], ["フォースアウト", "ふぉーすあうと", "進塁しなければならない走者が、塁に触れられてアウトになること"], ["フライ", "ふらい", "高く上がった打球"], ["振り逃げ", "ふりにげ", "第3ストライクを捕手が捕れず、打者が一塁へ走れること"], ["フルカウント", "ふるかうんと", "3ボール2ストライク"], ["併殺", "へいさつ", "ゲッツー"], ["ベースカバー", "べーすかばー", "野手が塁に入ること"], ["ヘッドスライディング", "へっどすらいでぃんぐ", "頭から塁に滑り込むこと"], ["捕逸", "ほいつ", "パスボール"], ["暴投", "ぼうとう", "ワイルドピッチ"], ["ボーク", "ぼーく", "走者がいるときの投手の反則。走者が1つ進む"], ["ボール", "ぼーる", "ストライクゾーンを外れた球"], ["ホームイン", "ほーむいん", "生還"], ["ホームラン", "ほーむらん", "本塁打"], ["ポテンヒット", "ぽてんひっと", "野手の間に落ちる安打"], ["マウンド", "まうんど", "投手が投げる盛り上がった場所"], ["満塁", "まんるい", "一塁・二塁・三塁すべてに走者がいること"], ["見逃し", "みのがし", "打たずに見送ったストライク"], ["無死", "むし", "ノーアウト"], ["猛打賞", "もうだしょう", "1試合で3安打以上"], ["野選", "やせん", "フィールダースチョイス"], ["ライト", "らいと", "右翼手"], ["ライナー", "らいなー", "直線的に飛ぶ打球"], ["ランエンドヒット", "らんえんどひっと", "走者がスタートし、打者は好球なら打つ作戦"], ["ランダウン", "らんだうん", "挟殺プレー"], ["リタッチ", "りたっち", "飛球の捕球後に元の塁に戻ること"], ["リード", "りーど", "走者が塁から離れること。点差で勝っていること"], ["リリーフ", "りりーふ", "救援投手"], ["臨時代走", "りんじだいそう", "特別ルールで一時的に出す代走"], ["レフト", "れふと", "左翼手"], ["ワイルドピッチ", "わいるどぴっち", "暴投"], ["ワンバウンド", "わんばうんど", "一度地面に弾んだ球"], ["安打", "あんだ", "ヒット"], ["ヒット", "ひっと", "安打"], ["本塁打", "ほんるいだ", "ホームラン"], ["得点", "とくてん", "本塁に還って入った点"], ["好投", "こうとう", "投手がよく投げること"], ["力投", "りきとう", "力いっぱいの投球"], ["快音", "かいおん", "打球を捉えた気持ちのいい音"], ["痛烈", "つうれつ", "鋭く強い打球"], ["好機", "こうき", "チャンス。得点のチャンス"], ["ピンチ", "ぴんち", "失点しそうな場面"], ["チャンス", "ちゃんす", "得点のチャンス。好機"], ["集中打", "しゅうちゅうだ", "安打が続いて得点すること"], ["反撃", "はんげき", "リードされているチームが追い上げること"], ["粘投", "ねんとう", "ピンチをしのぎながら粘り強く投げること"]];
+const toHira=s=>String(s||'').replace(/[ァ-ヶ]/g,c=>String.fromCharCode(c.charCodeAt(0)-0x60));
+const SEI={が:'か',ぎ:'き',ぐ:'く',げ:'け',ご:'こ',ざ:'さ',じ:'し',ず:'す',ぜ:'せ',ぞ:'そ',だ:'た',ぢ:'ち',づ:'つ',で:'て',ど:'と',ば:'は',び:'ひ',ぶ:'ふ',べ:'へ',ぼ:'ほ',ぱ:'は',ぴ:'ひ',ぷ:'ふ',ぺ:'へ',ぽ:'ほ',ぁ:'あ',ぃ:'い',ぅ:'う',ぇ:'え',ぉ:'お',ゃ:'や',ゅ:'ゆ',ょ:'よ',っ:'つ',ゔ:'う'};
+const seion=s=>[...s].map(c=>SEI[c]||c).join('');
+const GOJU='あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわ';
+let dictQ='';
+function dictHits(q){q=toHira(q.trim());if(!q)return DICT.slice().sort((a,b)=>a[1].localeCompare(b[1],'ja'));
+  const sq=seion(q);return DICT.filter(([t,r])=>r.startsWith(q)||t.startsWith(q)||toHira(t).startsWith(q)||seion(r).startsWith(sq)).sort((a,b)=>a[1].localeCompare(b[1],'ja'))}
+function dictResults(){const hits=dictHits(dictQ);const ins=editing()&&sheet&&sheet.ins;
+  return hits.length?hits.slice(0,80).map(([t,r,d])=>`<div class="dterm"><div style="min-width:0;flex:1"><b>${esc(t)}</b> <span class="small muted">${esc(r)}</span><div class="small">${esc(d)}</div></div>${ins?`<button class="btn ghost dins" data-act="dins" data-v="${esc(t)}">入れる</button>`:''}</div>`).join('')+(hits.length>80?`<p class="small muted">ほか${hits.length-80}件。もう1文字入れると絞り込めます。</p>`:'')
+  :'<p class="small muted" style="margin:0">見つかりませんでした。</p>'}
+function dictSheet(){
+  const heads=[...new Set(DICT.map(d=>seion(d[1][0])))].sort((a,b)=>GOJU.indexOf(a)-GOJU.indexOf(b));
+  return `<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true">
+    <h3>野球用語辞典</h3>
+    <input id="dq" type="search" value="${esc(dictQ)}" placeholder="頭文字を入力（例：す → スクイズ）" autocomplete="off" data-keep="no">
+    <div class="dheads">${heads.map(h=>`<button class="chip mini" data-act="dhead" data-v="${h}">${h}</button>`).join('')}</div>
+    <div id="dres" class="dres">${dictResults()}</div>
+    <button class="btn ghost" data-act="close">閉じる</button></div></div>`;
+}
+/* ---------- comments ---------- */
+let cDraft='',cEdit=null,cEditKey=null;
+function commentsFor(g,key){const out=[];const n=g.notes&&g.notes[key];if(n&&n.text)out.push({id:'n:'+key,t:n.text,at:n.at||0});
+  Object.entries(g.cmts||{}).forEach(([id,c])=>{if(c&&c.k===key)out.push({id,t:c.t,at:c.at||0,ed:c.ed})});return out.sort((a,b)=>a.at-b.at)}
+function commentList(g,key,newestFirst){const list=commentsFor(g,key);if(!list.length)return '';const ed=editing();
+  const arr=newestFirst?list.slice().reverse():list;
+  return `<div class="clist">${arr.map(c=>`<div class="note"><span class="k">${hm(c.at)}${c.ed?'（訂正）':''}</span>${esc(c.t)}${ed?`<div class="crow"><button class="x" data-act="cedit" data-v="${c.id}" data-k="${key}">訂正</button><button class="x" data-act="cdel" data-v="${c.id}" data-k="${key}" style="color:var(--danger)">削除</button></div>`:''}</div>`).join('')}</div>`}
+function composer(key,label){
+  return `<div class="noteedit"><div class="row" style="justify-content:space-between"><span class="lbl" style="margin:0">${cEdit&&cEditKey?`${esc(cEditKey.replace(/^(\d+)_(\d)$/,(m,i,h)=>i+'回'+(h==='1'?'裏':'表')))}のコメントを訂正中`:esc(label)+'のコメント'}</span><button class="x" data-act="dictopen" data-v="ins" style="color:var(--accent);font-weight:700">用語から入れる</button></div>
+    <textarea id="cbox" data-keep="no" maxlength="400" placeholder="例：先頭打者がセンター前ヒット！">${esc(cDraft)}</textarea>
+    <div class="row" style="justify-content:flex-end">${cEdit?'<button class="btn ghost" data-act="ccancel">やめる</button>':''}<button class="btn" data-act="csend" data-v="${key}">${cEdit?'訂正を保存':'送信'}</button></div></div>`;
+}
+function cWrite(g,id,val){const FV=firebase.firestore.FieldValue;
+  if(id.startsWith('n:')){const k=id.slice(2);return db.doc('games/'+g.id).update(new firebase.firestore.FieldPath('notes',k),val===null?FV.delete():{text:val.t,at:val.at})}
+  return db.doc('games/'+g.id).update(new firebase.firestore.FieldPath('cmts',id),val===null?FV.delete():val)}
+function sendComment(key){if(cEdit&&cEditKey)key=cEditKey;const g=cur();if(!g)return;const t=(document.getElementById('cbox')?.value??cDraft).trim();if(!t){toast('コメントを入力してください');return}
+  if(cEdit){const id=cEdit;const old=commentsFor(g,key).find(c=>c.id===id);const val={k:key,t,at:old?old.at:Date.now(),ed:true};
+    if(id.startsWith('n:')){g.notes[id.slice(2)]={text:t,at:val.at}}else{g.cmts=g.cmts||{};g.cmts[id]=val}
+    cWrite(g,id,val).catch(writeErr);toast('訂正しました')}
+  else{const id=uid();const val={k:key,t,at:Date.now()};g.cmts=g.cmts||{};g.cmts[id]=val;cWrite(g,id,val).catch(writeErr);toast('送信しました')}
+  cDraft='';cEdit=null;cEditKey=null;render();}
+function delComment(id,key){const g=cur();if(!g)return;const old=commentsFor(g,key).find(c=>c.id===id);if(!old)return;
+  if(id.startsWith('n:'))delete g.notes[id.slice(2)];else if(g.cmts)delete g.cmts[id];
+  cWrite(g,id,null).catch(writeErr);if(cEdit===id){cEdit=null;cEditKey=null;cDraft=''}render();const gid=g.id;
+  toastUndo('コメントを削除しました',()=>{const g2=games[gid];if(!g2)return;const val={k:key,t:old.t,at:old.at,ed:old.ed||false};
+    if(id.startsWith('n:')){g2.notes=g2.notes||{};g2.notes[id.slice(2)]={text:old.t,at:old.at}}else{g2.cmts=g2.cmts||{};g2.cmts[id]=val}cWrite(g2,id,val).catch(writeErr);render()})}
 
 /* ---------- account & admin ---------- */
 function syncLabel(){
