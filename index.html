@@ -184,8 +184,8 @@ textarea{min-height:120px}
 .roster .nm{flex:1;min-width:0}
 .x{border:0;background:none;color:var(--muted);font-size:13px;padding:6px}
 .glist{list-style:none;margin:0;padding:0}
-.glist li button{width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:12px 0;display:flex;gap:10px;align-items:center}
-.glist li:first-child button{border-top:0}
+.glist li>button{width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);padding:12px 0;display:flex;gap:10px;align-items:center}
+.glist li:first-child>button{border-top:0}
 .glist .sc{font-family:var(--f-num);font-size:22px;font-weight:700;margin-left:auto;white-space:nowrap}
 
 .empty{padding:28px 18px;text-align:center}
@@ -349,6 +349,13 @@ details[open]>summary .chev{border-top:0;border-bottom:7px solid var(--ink)}
 .swb .no{font-family:var(--f-body)!important;font-size:15px!important;background:var(--ink);color:var(--surface);border-radius:6px;padding:2px 6px;min-width:0!important}
 .swb .arrow{color:var(--accent)}
 .benchtag{display:inline-block;background:var(--accent);color:var(--accent-ink);font-weight:700;border-radius:99px;padding:0 8px;font-size:11px}
+.ktag{display:inline-block;font-size:11px;font-weight:700;border-radius:4px;padding:1px 6px;margin-right:6px;vertical-align:1px;background:#6b7a90;color:#fff}
+.ktag.official{background:#C8372D}.ktag.op{background:#2F6FD0}.ktag.practice{background:#5a6a7e}
+.tourl{font-size:12px;color:var(--chalk);margin-bottom:2px;font-weight:700}
+.vlink{border:0;background:none;color:var(--chalk);font:inherit;padding:0;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.ginfo{display:flex;flex-direction:column;gap:6px;background:var(--soft);border-radius:10px;padding:12px}
+a.btn{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+.gedit summary{cursor:pointer;font-weight:700;font-size:14px}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -378,6 +385,9 @@ let pendingWrites=false,offline=false,roles=[],unsubRoles=null;
 let team={name:'',players:[],rules:[]};
 let ruleQ='';let ruleEdit=null;let playerEdit=null;
 const UNI={1:'ファースト',2:'セカンド'};
+const KIND={official:'公式戦',op:'OP戦',practice:'練習試合'};
+function kindTag(g){return g.kind?`<span class="ktag ${g.kind}">${KIND[g.kind]}</span>`:''}
+function mapUrl(g){const q=(g.addr||g.venue||'').trim();return q?'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(q):''}
 function gdate(g){if(!g||!g.date)return '';const [y,m,d]=g.date.split('-').map(Number);const w='日月火水木金土'[new Date(y,m-1,d).getDay()];return `${m}月${d}日(${w})${g.time?' '+g.time+' 開始':''}`}
 function numFor(p,g){return g&&g.uniform==='2'?(p.num2||p.num||''):(p.num||'')}
 let games={};let currentId=null;let viewId=null;
@@ -602,7 +612,7 @@ function renderTop(g,S){
   if(g){
     const [t,b]=teamNames(g);const n=Math.max(g.innings,S.score[0].length);
     const st=!g.events||!g.events.length?'試合前':S.ended?'試合終了':'試合中';
-    head=`<div class="gamehead"><div style="min-width:0"><h1>${esc(g.usName)} vs ${esc(g.opponent)}</h1><div class="sub">${esc(gdate(g))}${g.venue?' ・ '+esc(g.venue):''}${g.bench?` ・ <span class="benchtag">${g.bench==='1'?'一塁側':'三塁側'}ベンチ</span>`:''}</div></div><span class="status ${st==='試合中'?'live':st==='試合終了'?'done':''}">${st}</span></div>`;
+    head=`<div class="gamehead"><div style="min-width:0">${g.tour||g.kind?`<div class="tourl">${kindTag(g)}${esc(g.tour||'')}</div>`:''}<h1>${esc(g.usName)} vs ${esc(g.opponent)}</h1><div class="sub">${esc(gdate(g))}${g.venue?` ・ <button class="vlink" data-act="ginfo" data-v="${g.id}">${esc(g.venue)} 地図›</button>`:` ・ <button class="vlink" data-act="ginfo" data-v="${g.id}">試合情報›</button>`}${g.bench?` ・ <span class="benchtag">${g.bench==='1'?'一塁側':'三塁側'}ベンチ</span>`:''}</div></div><span class="status ${st==='試合中'?'live':st==='試合終了'?'done':''}">${st}</span></div>`;
     let hd='<tr><th class="tn"></th>';for(let i=1;i<=n;i++)hd+=`<th>${i}</th>`;hd+='<th>計</th><th>安</th></tr>';
     const rows=[0,1].map(h=>{let r=`<tr><td class="tn">${esc([t,b][h])}</td>`;
       for(let i=0;i<n;i++){let v=S.score[h][i];let txt=v==null?'':v;
@@ -778,7 +788,7 @@ function renderLive(g,S){
       else if(cl)noteCard=`<div class="card pad"><h2>${label}　記録係のコメント</h2>${cl}</div>`}}
   const benchBar=editing()?`<div class="card pad row" style="justify-content:space-between"><span class="small muted">ベンチ：${g.bench==='1'?'一塁側':g.bench==='3'?'三塁側':'未定'}</span><div class="seg" style="flex:0 0 auto">${[['1','一塁側'],['3','三塁側']].map(([k,l])=>`<button aria-pressed="${g.bench===k}" data-act="bench" data-v="${k}">${l}</button>`).join('')}</div></div>`:'';
   const uniBar=editing()?`<div class="card pad row" style="justify-content:space-between"><span class="small muted">背番号：${UNI[g.uniform||'1']}ユニフォーム</span><div class="seg" style="flex:0 0 auto">${['1','2'].map(u=>`<button aria-pressed="${(g.uniform||'1')===u}" data-act="uni" data-v="${u}"><img class="uimg" src="uni${u}.png" alt="" style="vertical-align:middle;margin-right:4px">${UNI[u]}</button>`).join('')}</div></div>`:'';
-  const delBar=isOwner()&&scorer?`<div class="row" style="justify-content:flex-end"><button class="x" data-act="gamedel" data-v="${g.id}" style="color:var(--danger)">この試合のデータを削除</button></div>`:'';
+  const delBar=isScorer()&&scorer?`<div class="row" style="justify-content:flex-end"><button class="x" data-act="gamedel" data-v="${g.id}" style="color:var(--danger)">この試合のデータを削除</button></div>`:'';
   return sit+panel+noteCard+plays+uniBar+benchBar+delBar;
 }
 function pitchLines(seq,idx,cnt,lastText,code,ed){
@@ -904,7 +914,7 @@ function renderGames(){
   const list=Object.values(games).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
   const items=list.map(gm=>{const S=replay(gm);const [t,b]=teamNames(gm);
     const st=!gm.events||!gm.events.length?'試合前':S.ended?'終了':'試合中';
-    return `<li><button data-act="view" data-v="${gm.id}"><div style="min-width:0"><div style="font-weight:700">${esc(gm.usName)} vs ${esc(gm.opponent)}${gm.id===currentId?' <span class="small" style="color:var(--accent)">● 速報中</span>':''}</div><div class="small muted">${esc(gdate(gm))} ・ ${st}</div></div><span class="sc">${S.tot[0]}-${S.tot[1]}</span></button>${isOwner()&&scorer?`<div style="text-align:right"><button class="x" data-act="open" data-v="delgame" data-g="${gm.id}">この試合を削除</button></div>`:''}</li>`}).join('');
+    return `<li><button data-act="view" data-v="${gm.id}"><div style="min-width:0">${gm.tour||gm.kind?`<div class="small" style="margin-bottom:2px">${kindTag(gm)}${esc(gm.tour||'')}</div>`:''}<div style="font-weight:700">${esc(gm.usName)} vs ${esc(gm.opponent)}${gm.id===currentId?' <span class="small" style="color:var(--accent)">● 速報中</span>':''}</div><div class="small muted">${esc(gdate(gm))} ・ ${st}${gm.venue?' ・ '+esc(gm.venue):''}</div></div><span class="sc">${S.tot[0]}-${S.tot[1]}</span></button><div class="row" style="justify-content:flex-end;gap:6px"><button class="chip mini" data-act="ginfo" data-v="${gm.id}">試合情報・地図</button></div>${isScorer()&&scorer?`<div style="text-align:right"><button class="x" data-act="open" data-v="delgame" data-g="${gm.id}">この試合を削除</button></div>`:''}</li>`}).join('');
   const form=editing()?newGameForm():'';
   return form+`<div class="card pad"><h2>試合一覧</h2>${list.length?`<ul class="glist">${items}</ul>`:'<p class="muted small">まだ試合がありません。</p>'}</div>`;
 }
@@ -919,7 +929,9 @@ function newGameForm(){
   <form class="form" data-form="newgame" style="margin-top:12px">
     <div class="row"><label class="f">相手チーム<input id="ng_opp" required placeholder="例：○○ボーイズ"></label></div>
     <div class="row"><label class="f">日付<input id="ng_date" type="date" value="${ds}"></label><label class="f">開始時間<input id="ng_time" type="time" step="60" value="09:00"></label></div>
-    <div class="row"><label class="f">球場<input id="ng_venue" placeholder="例：市民球場"></label><label class="f">イニング数<select id="ng_inn">${[5,6,7,9].map(n=>`<option ${n===7?'selected':''}>${n}</option>`).join('')}</select></label></div>
+    <div class="row"><label class="f">大会名<input id="ng_tour" placeholder="例：秋季関西連盟大会 1回戦"></label><label class="f">試合の種類<select id="ng_kind">${[['official','公式戦'],['op','OP戦'],['practice','練習試合']].map(([k,l])=>`<option value="${k}">${l}</option>`).join('')}</select></label></div>
+    <div class="row"><label class="f">グラウンド名<input id="ng_venue" placeholder="例：城山公園球場"></label><label class="f">住所（地図用・任意）<input id="ng_addr" placeholder="空欄ならグラウンド名で地図を探します"></label></div>
+    <div class="row"><label class="f">イニング数<select id="ng_inn">${[5,6,7,9].map(n=>`<option ${n===7?'selected':''}>${n}</option>`).join('')}</select></label></div>
     <div class="row"><label class="f">攻撃<select id="ng_top"><option value="1">先攻（表）</option><option value="0">後攻（裏）</option></select></label><label class="f">相手の先発投手<input id="ng_opit" placeholder="名前か背番号（任意）"></label></div>
     <div class="row"><label class="f">ユニフォーム<select id="ng_uni"><option value="1">ファースト（公式）</option><option value="2">セカンド</option></select></label><label class="f">ベンチ<select id="ng_bench"><option value="1">一塁側</option><option value="3">三塁側</option><option value="">未定</option></select></label></div>
     <div class="lbl" style="margin:4px 0 0">スターティングメンバー</div>
@@ -971,6 +983,7 @@ function benchOf(g,S){const used=new Set();S.hist.forEach(h=>h.forEach(p=>used.a
 function pickList(players,act,extra=''){return players.length?`<div class="pick">${players.map(p=>`<button data-act="${act}" data-v="${p.id}" ${extra}><span class="no num">${esc(numFor(p,cur()))}</span>${esc(p.name)}</button>`).join('')}</div>`:'<p class="muted small">控えの選手がいません。名簿に追加してください。</p>'}
 function renderSheet(g,S){
   if(sheet.type==='login')return loginSheet();
+  if(sheet.type==='ginfo')return ginfoSheet();
   if(sheet.type==='dict')return dictSheet();
   let body='';
   if(!g||!S){sheet=null;return''}
@@ -1130,6 +1143,9 @@ document.addEventListener('click',ev=>{
     case'undo':undo();break;
     case'runner':sheet={type:'runner',base:+v};render();break;
     case'fmode':fieldMode=v;render();break;
+    case'ginfo':sheet={type:'ginfo',gid:v};render();break;
+    case'mapline':{const gm=games[sheet.gid];if(gm)location.href='https://line.me/R/share?text='+encodeURIComponent(mapText(gm));break}
+    case'mapcopy':{const gm=games[sheet.gid];if(!gm)break;(navigator.clipboard?navigator.clipboard.writeText(mapText(gm)):Promise.reject()).then(()=>toast('コピーしました')).catch(()=>toast('コピーできませんでした。「地図を開く」から共有してください'));break}
     case'plsel':sheet={type:'plsel',slot:+v};render();break;
     case'aball':abAll=v==='1';abOpen.clear();render();abAll=null;document.querySelectorAll('details[data-ab]').forEach(d=>{if(v==='1')abOpen.add(d.dataset.ab);else abOpen.add('x'+d.dataset.ab)});break;
     case'shline':{const g2=cur();if(!g2)break;const txt=resultText(g2,replay(g2));location.href='https://line.me/R/share?text='+encodeURIComponent(txt);break}
@@ -1248,7 +1264,7 @@ document.addEventListener('submit',ev=>{
     const uniform=document.getElementById('ng_uni').value;const players={};team.players.forEach(p=>players[p.id]={num:numFor(p,{uniform}),name:p.name});
     const id=uid();
     games[id]={id,createdAt:Date.now(),updatedAt:Date.now(),usName:team.name||'自チーム',opponent:opp,date:document.getElementById('ng_date').value,time:document.getElementById('ng_time').value||'',
-      venue:document.getElementById('ng_venue').value.trim(),innings:+document.getElementById('ng_inn').value,weTop:document.getElementById('ng_top').value==='1',
+      venue:document.getElementById('ng_venue').value.trim(),tour:document.getElementById('ng_tour').value.trim(),kind:document.getElementById('ng_kind').value,addr:document.getElementById('ng_addr').value.trim(),innings:+document.getElementById('ng_inn').value,weTop:document.getElementById('ng_top').value==='1',
       oppPitcher:document.getElementById('ng_opit').value.trim()||'先発投手',lineup,startPitcher:sp.pid,players,uniform,bench:document.getElementById('ng_bench').value,events:[]};
     saveGame(id);setCurrent(id);viewId=id;tab='live';render();window.scrollTo(0,0);toast('試合を作りました。速報を始めましょう');
   }
@@ -1260,6 +1276,10 @@ document.addEventListener('submit',ev=>{
     else team.rules.push({id:uid(),title:t,body:bd,src,at:Date.now()});
     ruleEdit=null;saveTeam();toast('ルールメモを保存しました');render()}
   if(f==='login'){doLogin();return}
+  if(f==='ginfo'){const gm=games[sheet.gid];if(!gm)return;const v=id=>document.getElementById(id).value.trim();
+    const opp=v('gi_opp');if(!opp){toast('相手チームを入力してください');return}
+    Object.assign(gm,{tour:v('gi_tour'),kind:document.getElementById('gi_kind').value,venue:v('gi_venue'),addr:v('gi_addr'),opponent:opp,date:v('gi_date')||gm.date,time:v('gi_time'),updatedAt:Date.now()});
+    saveGame(gm.id);toast('試合情報を保存しました');render();return}
   if(f==='player'){const pl=team.players.find(x=>x.id===playerEdit);if(!pl)return;
     const n1=document.getElementById('pe_n1').value.trim(),n2=document.getElementById('pe_n2').value.trim(),nm=document.getElementById('pe_name').value.trim();
     if(!nm){toast('名前を入力してください');return}
@@ -1423,6 +1443,24 @@ function dictSheet(){
     <div id="dres" class="dres">${dictResults()}</div>
     <button class="btn ghost" data-act="close">閉じる</button></div></div>`;
 }
+function ginfoSheet(){
+  const gm=games[sheet.gid];if(!gm){sheet=null;return ''}
+  const mu=mapUrl(gm);const ed=editing();
+  const view=`<div class="ginfo">
+    <div>${kindTag(gm)}<b>${esc(gm.tour||'（大会名なし）')}</b></div>
+    <div>${esc(gm.usName)} vs ${esc(gm.opponent)}</div>
+    <div class="small muted">${esc(gdate(gm))}${gm.bench?` ・ ${gm.bench==='1'?'一塁側':'三塁側'}ベンチ`:''}</div>
+    <div><b>グラウンド</b>　${esc(gm.venue||'未入力')}${gm.addr?`<div class="small muted">${esc(gm.addr)}</div>`:''}</div></div>
+    ${mu?`<div class="row"><a class="btn" href="${mu}" target="_blank" rel="noopener">地図を開く</a><button class="btn line" data-act="mapline">地図をLINEで送る</button><button class="btn ghost" data-act="mapcopy">リンクをコピー</button></div>`:'<p class="small muted" style="margin:0">グラウンド名か住所を入れると、地図を開いたり共有したりできます。</p>'}`;
+  const form=ed?`<details class="gedit" ${mu?'':'open'}><summary>試合情報を編集</summary><form class="form" data-form="ginfo" style="margin-top:10px">
+    <div class="row"><label class="f">大会名<input id="gi_tour" value="${esc(gm.tour||'')}" data-keep="no"></label><label class="f">試合の種類<select id="gi_kind" data-keep="no"><option value="">未設定</option>${[['official','公式戦'],['op','OP戦'],['practice','練習試合']].map(([k,l])=>`<option value="${k}" ${gm.kind===k?'selected':''}>${l}</option>`).join('')}</select></label></div>
+    <div class="row"><label class="f">グラウンド名<input id="gi_venue" value="${esc(gm.venue||'')}" data-keep="no"></label><label class="f">住所（地図用・任意）<input id="gi_addr" value="${esc(gm.addr||'')}" data-keep="no"></label></div>
+    <div class="row"><label class="f">相手チーム<input id="gi_opp" value="${esc(gm.opponent||'')}" data-keep="no"></label><label class="f">日付<input id="gi_date" type="date" value="${esc(gm.date||'')}" data-keep="no"></label><label class="f">開始時間<input id="gi_time" type="time" value="${esc(gm.time||'')}" data-keep="no"></label></div>
+    <button class="btn" type="submit">保存する</button></form></details>`:'';
+  return `<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true"><h3>試合情報</h3>${view}${form}<button class="btn ghost" data-act="close">閉じる</button></div></div>`;
+}
+function mapText(gm){return `【グラウンド】${gm.venue||''}${gm.tour?`\n${gm.tour}${gm.kind?`（${KIND[gm.kind]}）`:''}`:''}\n${gdate(gm)}　vs ${gm.opponent}${gm.addr?`\n${gm.addr}`:''}\n${mapUrl(gm)}`}
+
 /* ---------- share ---------- */
 function gameUrl(g){return location.origin+location.pathname+'#g='+g.id}
 function resultText(g,S){
@@ -1432,7 +1470,8 @@ function resultText(g,S){
   const line=h=>{let r=[];for(let i=0;i<n;i++){let v=S.score[h][i];r.push(v==null?(h===1&&S.ended&&i===S.score[0].length-1&&S.tot[1]>S.tot[0]?'X':'-'):v)}return r.join(' ')};
   const short=x=>{const y=x.replace(/リトルシニア|シニア|ボーイズ|ヤング|ポニー/g,'').trim()||x;return y.length>8?y.slice(0,8):y};
   const L=[];
-  L.push(`【${S.ended?'試合結果':'途中経過'}】${gdate(g)}${g.venue?' '+g.venue:''}`);
+  L.push(`【${S.ended?'試合結果':'途中経過'}】${g.tour?g.tour+(g.kind?`（${KIND[g.kind]}）`:''):(g.kind?KIND[g.kind]:'')}`.replace(/】$/,'】'));
+  L.push(`${gdate(g)}${g.venue?' '+g.venue:''}`);
   L.push(`${g.usName} ${my}-${op} ${g.opponent}　${res}`);
   if(g.bench&&!S.ended)L.push(`（${g.bench==='1'?'一塁側':'三塁側'}ベンチ）`);
   L.push('');
@@ -1445,6 +1484,7 @@ function resultText(g,S){
   if(hr.length)L.push(`本塁打：${hr.join('、')}`);
   if(xb.length)L.push(`長打：${xb.join('、')}`);
   L.push('',`▼試合の詳細（スコア・経過・成績）`,gameUrl(g));
+  if(mapUrl(g))L.push('',`▼グラウンドの地図`,mapUrl(g));
   return L.join('\n');
 }
 function shareBox(g,S){
