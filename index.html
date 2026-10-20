@@ -348,6 +348,7 @@ details[open]>summary .chev{border-top:0;border-bottom:7px solid var(--ink)}
 .f-hint{font-size:10px;fill:var(--muted);font-family:var(--f-body)}
 .swb .no{font-family:var(--f-body)!important;font-size:15px!important;background:var(--ink);color:var(--surface);border-radius:6px;padding:2px 6px;min-width:0!important}
 .swb .arrow{color:var(--accent)}
+.benchtag{display:inline-block;background:var(--accent);color:var(--accent-ink);font-weight:700;border-radius:99px;padding:0 8px;font-size:11px}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -601,7 +602,7 @@ function renderTop(g,S){
   if(g){
     const [t,b]=teamNames(g);const n=Math.max(g.innings,S.score[0].length);
     const st=!g.events||!g.events.length?'試合前':S.ended?'試合終了':'試合中';
-    head=`<div class="gamehead"><div style="min-width:0"><h1>${esc(g.usName)} vs ${esc(g.opponent)}</h1><div class="sub">${esc(gdate(g))}${g.venue?' ・ '+esc(g.venue):''}</div></div><span class="status ${st==='試合中'?'live':st==='試合終了'?'done':''}">${st}</span></div>`;
+    head=`<div class="gamehead"><div style="min-width:0"><h1>${esc(g.usName)} vs ${esc(g.opponent)}</h1><div class="sub">${esc(gdate(g))}${g.venue?' ・ '+esc(g.venue):''}${g.bench?` ・ <span class="benchtag">${g.bench==='1'?'一塁側':'三塁側'}ベンチ</span>`:''}</div></div><span class="status ${st==='試合中'?'live':st==='試合終了'?'done':''}">${st}</span></div>`;
     let hd='<tr><th class="tn"></th>';for(let i=1;i<=n;i++)hd+=`<th>${i}</th>`;hd+='<th>計</th><th>安</th></tr>';
     const rows=[0,1].map(h=>{let r=`<tr><td class="tn">${esc([t,b][h])}</td>`;
       for(let i=0;i<n;i++){let v=S.score[h][i];let txt=v==null?'':v;
@@ -775,9 +776,10 @@ function renderLive(g,S){
     if(ni){const key=noteKey(ni.inning,ni.half),label=`${ni.inning}回${ni.half?'裏':'表'}`;const cl=commentList(g,key,true);
       if(editing())noteCard=`<div class="card pad stack">${composer(key,label)}${cl}</div>`;
       else if(cl)noteCard=`<div class="card pad"><h2>${label}　記録係のコメント</h2>${cl}</div>`}}
+  const benchBar=editing()?`<div class="card pad row" style="justify-content:space-between"><span class="small muted">ベンチ：${g.bench==='1'?'一塁側':g.bench==='3'?'三塁側':'未定'}</span><div class="seg" style="flex:0 0 auto">${[['1','一塁側'],['3','三塁側']].map(([k,l])=>`<button aria-pressed="${g.bench===k}" data-act="bench" data-v="${k}">${l}</button>`).join('')}</div></div>`:'';
   const uniBar=editing()?`<div class="card pad row" style="justify-content:space-between"><span class="small muted">背番号：${UNI[g.uniform||'1']}ユニフォーム</span><div class="seg" style="flex:0 0 auto">${['1','2'].map(u=>`<button aria-pressed="${(g.uniform||'1')===u}" data-act="uni" data-v="${u}"><img class="uimg" src="uni${u}.png" alt="" style="vertical-align:middle;margin-right:4px">${UNI[u]}</button>`).join('')}</div></div>`:'';
   const delBar=isOwner()&&scorer?`<div class="row" style="justify-content:flex-end"><button class="x" data-act="gamedel" data-v="${g.id}" style="color:var(--danger)">この試合のデータを削除</button></div>`:'';
-  return sit+panel+noteCard+plays+uniBar+delBar;
+  return sit+panel+noteCard+plays+uniBar+benchBar+delBar;
 }
 function pitchLines(seq,idx,cnt,lastText,code,ed){
   const PD={B:'ボール',S:'見逃しストライク',W:'空振りストライク',F:'ファウル'};
@@ -919,7 +921,7 @@ function newGameForm(){
     <div class="row"><label class="f">日付<input id="ng_date" type="date" value="${ds}"></label><label class="f">開始時間<input id="ng_time" type="time" step="60" value="09:00"></label></div>
     <div class="row"><label class="f">球場<input id="ng_venue" placeholder="例：市民球場"></label><label class="f">イニング数<select id="ng_inn">${[5,6,7,9].map(n=>`<option ${n===7?'selected':''}>${n}</option>`).join('')}</select></label></div>
     <div class="row"><label class="f">攻撃<select id="ng_top"><option value="1">先攻（表）</option><option value="0">後攻（裏）</option></select></label><label class="f">相手の先発投手<input id="ng_opit" placeholder="名前か背番号（任意）"></label></div>
-    <div class="row"><label class="f">ユニフォーム<select id="ng_uni"><option value="1">ファースト（公式）</option><option value="2">セカンド</option></select></label></div>
+    <div class="row"><label class="f">ユニフォーム<select id="ng_uni"><option value="1">ファースト（公式）</option><option value="2">セカンド</option></select></label><label class="f">ベンチ<select id="ng_bench"><option value="1">一塁側</option><option value="3">三塁側</option><option value="">未定</option></select></label></div>
     <div class="lbl" style="margin:4px 0 0">スターティングメンバー</div>
     <div class="lu">${lu}</div>
     <div id="ng_sprow" class="row" hidden><label class="f">先発投手（指名打者を使うとき）<select id="ng_sp">${opts()}</select></label></div>
@@ -1186,6 +1188,7 @@ document.addEventListener('click',ev=>{
     case'delrule':team.rules=(team.rules||[]).filter(r=>r.id!==v);ruleEdit=null;saveTeam();toast('メモを削除しました');render();break;
     case'editp':playerEdit=v;render();break;
     case'cancelp':playerEdit=null;render();break;
+    case'bench':{const gm=cur();if(!gm)break;gm.bench=gm.bench===v?'':v;gm.updatedAt=Date.now();saveGame(gm.id);toast(gm.bench?`${gm.bench==='1'?'一塁側':'三塁側'}ベンチにしました`:'ベンチを未定にしました');render();break}
     case'uni':{const gm=cur();if(!gm)break;gm.uniform=v;Object.keys(gm.players).forEach(id=>{const tp=team.players.find(x=>x.id===id);if(tp)gm.players[id].num=numFor(tp,gm)});gm.updatedAt=Date.now();saveGame(gm.id);toast(`${UNI[v]}ユニフォームの背番号にしました`);render();break}
     case'delp':playerEdit=null;team.players=team.players.filter(p=>p.id!==v);saveTeam();render();break;
   }
@@ -1246,7 +1249,7 @@ document.addEventListener('submit',ev=>{
     const id=uid();
     games[id]={id,createdAt:Date.now(),updatedAt:Date.now(),usName:team.name||'自チーム',opponent:opp,date:document.getElementById('ng_date').value,time:document.getElementById('ng_time').value||'',
       venue:document.getElementById('ng_venue').value.trim(),innings:+document.getElementById('ng_inn').value,weTop:document.getElementById('ng_top').value==='1',
-      oppPitcher:document.getElementById('ng_opit').value.trim()||'先発投手',lineup,startPitcher:sp.pid,players,uniform,events:[]};
+      oppPitcher:document.getElementById('ng_opit').value.trim()||'先発投手',lineup,startPitcher:sp.pid,players,uniform,bench:document.getElementById('ng_bench').value,events:[]};
     saveGame(id);setCurrent(id);viewId=id;tab='live';render();window.scrollTo(0,0);toast('試合を作りました。速報を始めましょう');
   }
   if(f==='rulesearch'){ruleQ=document.getElementById('rq').value.trim();render();document.getElementById('rq')?.blur()}
@@ -1431,6 +1434,7 @@ function resultText(g,S){
   const L=[];
   L.push(`【${S.ended?'試合結果':'途中経過'}】${gdate(g)}${g.venue?' '+g.venue:''}`);
   L.push(`${g.usName} ${my}-${op} ${g.opponent}　${res}`);
+  if(g.bench&&!S.ended)L.push(`（${g.bench==='1'?'一塁側':'三塁側'}ベンチ）`);
   L.push('');
   L.push(`${short(t)}　${S.tot[0]}点`,`　${line(0)}`);
   L.push(`${short(b)}　${S.tot[1]}点`,`　${line(1)}`);
