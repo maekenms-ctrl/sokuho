@@ -372,6 +372,8 @@ table.ls td.jmp:active{filter:brightness(1.4)}
 .spdh{margin-left:auto;font-size:11px;color:var(--chalk-dim);white-space:nowrap}
 .lulist li.isp{background:var(--note-bg);border-radius:6px}
 .lulist li.isp .nm{font-weight:800}
+.abl>li.cmtli{display:block;padding:8px 0;border-top:1px solid var(--line)}
+.abl>li.cmtli:first-child{border-top:0}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -797,12 +799,11 @@ function renderLive(g,S){
   const panel=editing()&&!S.ended?inputPanel(g,S):(editing()&&S.ended?`<div class="card pad row"><span class="muted small" style="flex:1">試合終了の記録を取り消すと再開できます。</span><button class="btn ghost" data-act="undo">取り消し</button></div>`:'');
   const abEntries=S.log.filter(l=>l.kind==='pa'||l.kind==='tail');const recentAB=abEntries.slice(-5);
   const upd=g.updatedAt?new Date(g.updatedAt):null;
-  const plays=`<div class="card pad"><h2 style="display:flex;justify-content:space-between;gap:8px"><span>最新の経過</span>${upd?`<span style="font-weight:500;letter-spacing:0">最終更新 ${upd.getHours()}:${String(upd.getMinutes()).padStart(2,'0')}</span>`:''}</h2>${recentAB.length||S.cur&&S.cur.items.length?`<ul class="plays abl">${liveAtBat(S)}${(()=>{const ls=abList(abEntries,S,true);return ls.slice(-5).reverse().join('')})()}</ul>`:`<p class="muted small">${started?'':'プレイボール前です。'}最初の打席の結果がここに出ます。</p>`}</div>`;
+  const plays=`<div class="card pad"><h2 style="display:flex;justify-content:space-between;gap:8px"><span>最新の経過</span>${upd?`<span style="font-weight:500;letter-spacing:0">最終更新 ${upd.getHours()}:${String(upd.getMinutes()).padStart(2,'0')}</span>`:''}</h2>${recentAB.length||S.cur&&S.cur.items.length||allComments(g).length?`<ul class="plays abl">${liveAtBat(S)}${(()=>{const ls=abList(abEntries,S,true);const ents=abEntries.slice(-5),htm=ls.slice(-5);const from=ents.length?ents[0].ei:-1;const ck=S.inning+'_'+S.half;const cm=allComments(g).filter(c=>c.n==null?c.k===ck:c.n>from);return mergeTL(htm,ents,cm).slice(-8).reverse().map(x=>x.html).join('')})()}</ul>`:`<p class="muted small">${started?'':'プレイボール前です。'}最初の打席の結果がここに出ます。</p>`}</div>`;
   let noteCard='';
   if(started){const ni=S.ended?(S.log.length?S.log[S.log.length-1]:null):{inning:S.inning,half:S.half};
     if(ni){const key=noteKey(ni.inning,ni.half),label=`${ni.inning}回${ni.half?'裏':'表'}`;const cl=commentList(g,key,true);
-      if(editing())noteCard=`<div class="card pad stack">${composer(key,label)}${cl}</div>`;
-      else if(cl)noteCard=`<div class="card pad"><h2>${label}　記録係のコメント</h2>${cl}</div>`}}
+      if(editing())noteCard=`<div class="card pad stack">${composer(key,label)}<p class="small muted" style="margin:0">送ったコメントは、下の「最新の経過」と「経過」タブに、そのときの打席の流れに沿って表示されます。</p></div>`}}
   const benchBar=editing()?`<div class="card pad row" style="justify-content:space-between"><span class="small muted">ベンチ：${g.bench==='1'?'一塁側':g.bench==='3'?'三塁側':'未定'}</span><div class="seg" style="flex:0 0 auto">${[['1','一塁側'],['3','三塁側']].map(([k,l])=>`<button aria-pressed="${g.bench===k}" data-act="bench" data-v="${k}">${l}</button>`).join('')}</div></div>`:'';
   const uniBar=editing()?`<div class="card pad row" style="justify-content:space-between"><span class="small muted">背番号：${UNI[g.uniform||'1']}ユニフォーム</span><div class="seg" style="flex:0 0 auto">${['1','2'].map(u=>`<button aria-pressed="${(g.uniform||'1')===u}" data-act="uni" data-v="${u}"><img class="uimg" src="uni${u}.png" alt="" style="vertical-align:middle;margin-right:4px">${UNI[u]}</button>`).join('')}</div></div>`:'';
   const delBar=isScorer()&&scorer?`<div class="row" style="justify-content:flex-end"><button class="x" data-act="gamedel" data-v="${g.id}" style="color:var(--danger)">この試合のデータを削除</button></div>`:'';
@@ -928,8 +929,8 @@ function renderLog(g,S){
   const groups=Object.values(map).sort((x,y)=>(y.inning-x.inning)||(y.half-x.half));
   if(!groups.length)return `<div class="card empty"><p class="muted">まだ記録がありません。</p></div>`;
   const tools=`<div class="row" style="justify-content:flex-end;gap:6px"><button class="chip mini" data-act="aball" data-v="1">すべて広げる</button><button class="chip mini" data-act="aball" data-v="0">すべてたたむ</button></div>`;
-  return tools+groups.map(gr=>{const label=`${gr.inning}回${gr.half?'裏':'表'}`;const nb=commentList(g,gr.k,false);
-    return `<div class="card" id="half-${gr.k}"><div class="half">${label}　${esc(gr.half?b:t)}の攻撃</div><div class="pad" style="padding-top:8px;display:flex;flex-direction:column;gap:8px">${nb}${gr.items.length?`<ul class="plays abl">${abList(gr.items.filter(x=>x.kind==='pa'||x.kind==='tail'),S,false).join('')}</ul>`:''}</div></div>`}).join('');
+  return tools+groups.map(gr=>{const label=`${gr.inning}回${gr.half?'裏':'表'}`;const ents=gr.items.filter(x=>x.kind==='pa'||x.kind==='tail');const tl=mergeTL(abList(ents,S,false),ents,commentsFor(g,gr.k));
+    return `<div class="card" id="half-${gr.k}"><div class="half">${label}　${esc(gr.half?b:t)}の攻撃</div><div class="pad" style="padding-top:8px;display:flex;flex-direction:column;gap:8px">${tl.length?`<ul class="plays abl">${tl.map(x=>x.html).join('')}</ul>`:''}</div></div>`}).join('');
 }
 function ipStr(o){return Math.floor(o/3)+(o%3?'.'+o%3:'')}
 function renderStats(g,S){
@@ -1541,7 +1542,11 @@ function shareBox(g,S){
 /* ---------- comments ---------- */
 let cDraft='',cEdit=null,cEditKey=null;
 function commentsFor(g,key){const out=[];const n=g.notes&&g.notes[key];if(n&&n.text)out.push({id:'n:'+key,t:n.text,at:n.at||0});
-  Object.entries(g.cmts||{}).forEach(([id,c])=>{if(c&&c.k===key)out.push({id,t:c.t,at:c.at||0,ed:c.ed})});return out.sort((a,b)=>a.at-b.at)}
+  Object.entries(g.cmts||{}).forEach(([id,c])=>{if(c&&c.k===key)out.push({id,k:key,t:c.t,at:c.at||0,ed:c.ed,n:c.n})});return out.sort((a,b)=>a.at-b.at)}
+function allComments(g){const keys=new Set([...Object.keys(g.notes||{}),...Object.values(g.cmts||{}).map(c=>c&&c.k).filter(Boolean)]);return [...keys].flatMap(k=>commentsFor(g,k))}
+function cmtLi(c){const ed=editing();return `<li class="cmtli"><div class="note"><span class="k">記録係のコメント　${hm(c.at)}${c.ed?'（訂正）':''}</span>${esc(c.t)}${ed?`<div class="crow"><button class="x" data-act="cedit" data-v="${c.id}" data-k="${c.k}">訂正</button><button class="x" data-act="cdel" data-v="${c.id}" data-k="${c.k}" style="color:var(--danger)">削除</button></div>`:''}</div></li>`}
+// コメントと打席を時系列で並べる（n=送信時点の記録数）
+function mergeTL(abHtml,abEntries,cmts){const items=abEntries.map((e,i)=>({key:e.ei,html:abHtml[i]}));cmts.forEach(c=>items.push({key:c.n!=null?c.n-0.5:1e9+c.at/1e13,html:cmtLi(c)}));return items.sort((a,b)=>a.key-b.key)}
 function commentList(g,key,newestFirst){const list=commentsFor(g,key);if(!list.length)return '';const ed=editing();
   const arr=newestFirst?list.slice().reverse():list;
   return `<div class="clist">${arr.map(c=>`<div class="note"><span class="k">${hm(c.at)}${c.ed?'（訂正）':''}</span>${esc(c.t)}${ed?`<div class="crow"><button class="x" data-act="cedit" data-v="${c.id}" data-k="${key}">訂正</button><button class="x" data-act="cdel" data-v="${c.id}" data-k="${key}" style="color:var(--danger)">削除</button></div>`:''}</div>`).join('')}</div>`}
@@ -1554,10 +1559,10 @@ function cWrite(g,id,val){const FV=firebase.firestore.FieldValue;
   if(id.startsWith('n:')){const k=id.slice(2);return db.doc('games/'+g.id).update(new firebase.firestore.FieldPath('notes',k),val===null?FV.delete():{text:val.t,at:val.at})}
   return db.doc('games/'+g.id).update(new firebase.firestore.FieldPath('cmts',id),val===null?FV.delete():val)}
 function sendComment(key){if(cEdit&&cEditKey)key=cEditKey;const g=cur();if(!g)return;const t=(document.getElementById('cbox')?.value??cDraft).trim();if(!t){toast('コメントを入力してください');return}
-  if(cEdit){const id=cEdit;const old=commentsFor(g,key).find(c=>c.id===id);const val={k:key,t,at:old?old.at:Date.now(),ed:true};
+  if(cEdit){const id=cEdit;const old=commentsFor(g,key).find(c=>c.id===id);const val={k:key,t,at:old?old.at:Date.now(),ed:true};if(old&&old.n!=null)val.n=old.n;
     if(id.startsWith('n:')){g.notes[id.slice(2)]={text:t,at:val.at}}else{g.cmts=g.cmts||{};g.cmts[id]=val}
     cWrite(g,id,val).catch(writeErr);toast('訂正しました')}
-  else{const id=uid();const val={k:key,t,at:Date.now()};g.cmts=g.cmts||{};g.cmts[id]=val;cWrite(g,id,val).catch(writeErr);toast('送信しました')}
+  else{const id=uid();const val={k:key,t,at:Date.now(),n:(g.events||[]).length};g.cmts=g.cmts||{};g.cmts[id]=val;cWrite(g,id,val).catch(writeErr);toast('送信しました')}
   cDraft='';cEdit=null;cEditKey=null;render();}
 function delComment(id,key){const g=cur();if(!g)return;const old=commentsFor(g,key).find(c=>c.id===id);if(!old)return;
   if(id.startsWith('n:'))delete g.notes[id.slice(2)];else if(g.cmts)delete g.cmts[id];
