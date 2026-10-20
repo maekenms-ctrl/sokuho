@@ -346,6 +346,8 @@ details[open]>summary .chev{border-top:0;border-bottom:7px solid var(--ink)}
 .f-pl.tap,.f-dh.tap{cursor:pointer}
 .f-pl.tap:active rect:last-of-type{fill:#F0802E}
 .f-hint{font-size:10px;fill:var(--muted);font-family:var(--f-body)}
+.swb .no{font-family:var(--f-body)!important;font-size:15px!important;background:var(--ink);color:var(--surface);border-radius:6px;padding:2px 6px;min-width:0!important}
+.swb .arrow{color:var(--accent)}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -1051,7 +1053,9 @@ function renderSheet(g,S){
       <div class="ps"><span><b class="num">${P.np}</b>球</span><span><b class="num">${ipStr(P.outs)}</b>回</span><span><b class="num">${P.H}</b>安</span><span><b class="num">${P.K}</b>振</span><span><b class="num">${P.BB+P.HBP}</b>四死</span><span><b class="num">${P.R}</b>失</span></div></div>
     ${pits.length?`<div class="lbl" style="margin:0">投手（名簿で「投手」に印を付けた控え）</div><div class="pick">${pits.map(p=>btn(p)).join('')}</div>`:''}
     <div class="lbl" style="margin:0">${pits.length?'その他の控え':'控えから'}</div>${others.length?`<div class="pick">${others.map(p=>btn(p)).join('')}</div>`:'<p class="small muted" style="margin:0">ほかの控えはいません。</p>'}
-    ${inL.length?`<div class="lbl" style="margin:0">出場中の野手から（前の投手の扱いは次で選べます）</div><div class="pick">${inL.map(o=>`<button data-act="pstep" data-v="${o.p.id}"><span class="no num">${esc(numFor(o.p,g))}</span><span>${esc(o.p.name)}<br><small class="muted" style="font-weight:500">いま ${o.pos} を守備</small></span></button>`).join('')}</div>`:''}
+    ${inL.length?(sheet.mode==='out'
+      ?`<div class="lbl" style="margin:0">投手にする野手を選ぶ（${esc(surname(S.pname(S.usP)))}はベンチへ）</div><div class="pick">${inL.map(o=>`<button data-act="pstep" data-v="${o.p.id}"><span class="no num">${esc(numFor(o.p,g))}</span><span>${esc(o.p.name)}<br><small class="muted" style="font-weight:500">いま ${o.pos}</small></span></button>`).join('')}</div><button class="x" data-act="pmode" data-v="">← 入れ替えに戻る</button>`
+      :`<div class="lbl" style="margin:0">野手と入れ替え（1タップ・${esc(surname(S.pname(S.usP)))}がその守備位置へ）</div><div class="pick">${inL.filter(o=>o.pos!=='投').map(o=>`<button data-act="dopitchsw" data-v="${o.p.id}" class="swb"><span class="no">${o.pos}</span><span>${esc(surname(o.p.name))}<b class="arrow"> ⇄ </b>${esc(surname(S.pname(S.usP)))}<br><small class="muted" style="font-weight:500">${esc(surname(o.p.name))}が投手、${esc(surname(S.pname(S.usP)))}が${PN(o.pos)}へ</small></span></button>`).join('')}</div><button class="x" data-act="pmode" data-v="out" style="align-self:flex-start">前の投手をベンチに下げて、野手を投手にする場合 ›</button>`):(dh?'<p class="small muted" style="margin:0">指名打者を使っているため、野手との入れ替えはできません。</p>':'')}
     ${pits.length?'':'<p class="small muted" style="margin:0">名簿の「変更」で投手に印を付けると、ここの一番上に並びます。</p>'}`;
   }else if(sheet.type==='pitcher2'){
     const np=team.players.find(p=>p.id===sheet.pid);const at=S.lineup.findIndex(x=>x.pid===sheet.pid);const from=at>=0?S.lineup[at].pos:'';
@@ -1073,7 +1077,9 @@ function renderSheet(g,S){
     ${pickList(benchOf(g,S),'dosub',`data-slot="${slot}" data-kind="${isDH?'代打':'守備'}" data-pos="${x.pos}"`)}
     ${isDH?'':`<div class="lbl" style="margin:0">守備位置だけ変える（そこにいる選手と入れ替え）</div>
     <div class="dirs">${FPOS.map(q=>`<button class="chip" aria-pressed="${x.pos===q}" data-act="dopos" data-slot="${slot}" data-v="${q}">${q}</button>`).join('')}</div>
-    ${!S.lineup.some(q=>q.pos==='指')?`<button class="btn ghost" data-act="pstep" data-v="${x.pid}">この選手を投手にする</button>`:''}`}`;
+    ${!S.lineup.some(q=>q.pos==='指')&&x.pos!=='投'?`<div class="lbl" style="margin:0">投手にする</div>
+      <button class="btn" data-act="dopitchsw" data-v="${x.pid}">${esc(surname(nm))}が投手、${esc(surname(S.pname(S.usP)))}が${PN(x.pos)}へ（入れ替え）</button>
+      <button class="btn ghost" data-act="pstep" data-v="${x.pid}">${esc(surname(S.pname(S.usP)))}はベンチに下げて、${esc(surname(nm))}を投手にする</button>`:''}`}`;
   }else if(sheet.type==='opppitcher'){
     const n=S.pitOrder.filter(k=>k.startsWith('o:')).length+1;
     const P=S.pit[S.pitKey&&S.pitKey.startsWith('o:')?S.pitKey:'o:'+S.oppP]||{np:0,outs:0,H:0,K:0,BB:0,HBP:0,R:0};
@@ -1156,6 +1162,9 @@ document.addEventListener('click',ev=>{
     case'dopos':push({t:'pos',slot:+el.dataset.slot,pos:v});if(sheet&&sheet.type==='plsel'){sheet=null;render();toast('守備位置を変更しました')}break;
     case'dopitch':{addPlayer(g,v);push({t:'pitcher',side:'us',pid:v});sheet=null;render();const gid=g.id;toastUndo('投手交代を記録しました',()=>{const g2=games[gid];if(g2&&g2.events.length&&g2.events.at(-1).t==='pitcher'){g2.events.pop();g2.updatedAt=Date.now();saveGame(gid);render()}});break}
     case'pstep':sheet={type:'pitcher2',pid:v};render();break;
+    case'pmode':sheet.mode=v||null;render();break;
+    case'dopitchsw':{addPlayer(g,v);push({t:'pitcher',side:'us',pid:v});sheet=null;render();const gid=g.id;
+      toastUndo('投手と野手を入れ替えました',()=>{const g2=games[gid];if(g2&&g2.events.length&&g2.events.at(-1).t==='pitcher'){g2.events.pop();g2.updatedAt=Date.now();saveGame(gid);render()}});break}
     case'dopitch2':case'dopitch2rep':{const ev={t:'pitcher',side:'us',pid:sheet.pid};if(a==='dopitch2rep'){addPlayer(g,v);ev.rep=v}addPlayer(g,sheet.pid);push(ev);sheet=null;render();const gid=g.id;
       toastUndo('投手交代を記録しました',()=>{const g2=games[gid];if(g2&&g2.events.length&&g2.events.at(-1).t==='pitcher'){g2.events.pop();g2.updatedAt=Date.now();saveGame(gid);render()}});break}
     case'opqp':{push({t:'pitcher',side:'opp',name:v});sheet=null;render();const gid=g.id;toastUndo(`相手の投手を${v}に交代しました`,()=>{const g2=games[gid];if(g2&&g2.events.length&&g2.events.at(-1).t==='pitcher'){g2.events.pop();g2.updatedAt=Date.now();saveGame(gid);render()}});break}
