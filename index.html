@@ -260,8 +260,15 @@ mark{background:var(--note-line);color:var(--ink);border-radius:3px;padding:0 2p
 .dterm{display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
 .dterm:first-child{border-top:0}
 .dins{padding:8px 12px;font-size:13px;flex:0 0 auto}
-.dheads{display:flex;flex-wrap:wrap;gap:4px}
-.dheads .chip{min-width:34px}
+.pkbox{display:flex;flex-direction:column;gap:6px;background:var(--soft);border-radius:10px;padding:10px}
+.pkbox.auto{background:var(--note-bg)}
+.pkh{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:700;color:var(--muted)}
+.pkh .x{padding:0 4px;color:var(--accent);font-weight:700}
+.pks{display:flex;flex-wrap:wrap;gap:6px}
+.pk{display:inline-flex;align-items:center}
+.pkx{border:0;background:var(--danger);color:#fff;border-radius:50%;width:20px;height:20px;font-size:12px;margin-left:-6px;padding:0}
+.star{border:0;background:none;font-size:22px;color:var(--muted);padding:0 2px;flex:0 0 auto}
+.star.on{color:#F0A020}
 .clist{display:flex;flex-direction:column;gap:8px}
 .crow{display:flex;gap:6px;justify-content:flex-end;margin-top:2px}
 .crow .x{padding:2px 6px}
@@ -1039,8 +1046,10 @@ document.addEventListener('click',ev=>{
     case'shmore':{const g2=cur();if(!g2)break;const txt=resultText(g2,replay(g2));if(navigator.share)navigator.share({text:txt}).catch(()=>{});else toast('この端末では使えません。「文章をコピー」を使ってください');break}
     case'shcopy':{const g2=cur();if(!g2)break;const txt=resultText(g2,replay(g2));(navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>toast('コピーしました。LINEに貼り付けてください')).catch(()=>{const pre=document.querySelector('.shprev');if(pre){const r=document.createRange();r.selectNodeContents(pre);const sel=getSelection();sel.removeAllRanges();sel.addRange(r)}toast('文章を選択しました。長押しでコピーしてください')});break}
     case'dictopen':sheet={type:'dict',ins:v==='ins'};render();setTimeout(()=>document.getElementById('dq')?.focus(),60);break;
-    case'dhead':{dictQ=v;const q=document.getElementById('dq');if(q)q.value=v;const r=document.getElementById('dres');if(r)r.innerHTML=dictResults();break}
-    case'dins':{const box=document.getElementById('cbox');cDraft=(box?box.value:cDraft)+v;sheet=null;render();const b2=document.getElementById('cbox');if(b2){b2.focus();b2.setSelectionRange(b2.value.length,b2.value.length)}toast(`「${v}」を入れました`);break}
+    case'dpick':{dictQ=v;render();break}
+    case'dfav':{if(dfavs.includes(v))dfavs=dfavs.filter(x=>x!==v);else{dfavs.push(v);toast(`「${v}」をよく使う言葉に追加しました`)}saveFavs();if(!dfavs.length)favEdit=false;render();break}
+    case'favedit':favEdit=!favEdit;render();break;
+    case'dins':{duse[v]=(duse[v]||0)+1;lsSet('duse',JSON.stringify(duse));const box=document.getElementById('cbox');cDraft=(box?box.value:cDraft)+v;sheet=null;render();const b2=document.getElementById('cbox');if(b2){b2.focus();b2.setSelectionRange(b2.value.length,b2.value.length)}toast(`「${v}」を入れました`);break}
     case'csend':sendComment(v);break;
     case'cedit':{const g2=cur();const c=commentsFor(g2,el.dataset.k).find(x=>x.id===v);if(!c)break;cEdit=v;cEditKey=el.dataset.k;cDraft=c.t;tab='live';render();const b=document.getElementById('cbox');if(b){b.focus();b.scrollIntoView({block:'center'})}else toast('「速報」タブのコメント欄で訂正できます');break}
     case'ccancel':cEdit=null;cEditKey=null;cDraft='';render();break;
@@ -1287,15 +1296,36 @@ const GOJU='あいうえおかきくけこさしすせそたちつてとなに�
 let dictQ='';
 function dictHits(q){q=toHira(q.trim());if(!q)return DICT.slice().sort((a,b)=>a[1].localeCompare(b[1],'ja'));
   const sq=seion(q);return DICT.filter(([t,r])=>r.startsWith(q)||t.startsWith(q)||toHira(t).startsWith(q)||seion(r).startsWith(sq)).sort((a,b)=>a[1].localeCompare(b[1],'ja'))}
-function dictResults(){const hits=dictHits(dictQ);const ins=editing()&&sheet&&sheet.ins;
-  return hits.length?hits.slice(0,80).map(([t,r,d])=>`<div class="dterm"><div style="min-width:0;flex:1"><b>${esc(t)}</b> <span class="small muted">${esc(r)}</span><div class="small">${esc(d)}</div></div>${ins?`<button class="btn ghost dins" data-act="dins" data-v="${esc(t)}">入れる</button>`:''}</div>`).join('')+(hits.length>80?`<p class="small muted">ほか${hits.length-80}件。もう1文字入れると絞り込めます。</p>`:'')
-  :'<p class="small muted" style="margin:0">見つかりませんでした。</p>'}
+const DEF_PICKS=['タイムリー','先制','好投','三者凡退','ナイスピッチ','ナイスバッティング','追加点','好機','ピンチ','ファインプレー','粘投','反撃'];
+function lsJ(k,d){try{return JSON.parse(lsGet(k,'')||'null')??d}catch(e){return d}}
+let dfavs=lsJ('dfavs',[]);let duse=lsJ('duse',{});let favEdit=false;
+function saveFavs(){lsSet('dfavs',JSON.stringify(dfavs))}
+function autoPicks(){
+  const texts=[];Object.values(games).forEach(gm=>{Object.values(gm.cmts||{}).forEach(c=>c&&c.t&&texts.push(c.t));Object.values(gm.notes||{}).forEach(n=>n&&n.text&&texts.push(n.text))});
+  const all=texts.join('\n');const sc={};
+  DICT.forEach(([t])=>{if(dfavs.includes(t))return;let n=0;if(all){let i=-1;while((i=all.indexOf(t,i+1))>=0)n++}n+=(duse[t]||0)*2;if(n>0)sc[t]=n});
+  const ranked=Object.keys(sc).sort((a,b)=>sc[b]-sc[a]);
+  DEF_PICKS.forEach(t=>{if(!ranked.includes(t)&&!dfavs.includes(t))ranked.push(t)});
+  return ranked.slice(0,10);
+}
+function dictResults(){
+  const q=dictQ.trim();if(!q)return '<p class="small muted" style="margin:10px 0">頭文字を入れると候補が出ます（例：す → スクイズ）。</p>';
+  const hits=dictHits(dictQ);const ins=editing()&&sheet&&sheet.ins;
+  return hits.length?hits.slice(0,80).map(([t,r,d])=>`<div class="dterm"><button class="star ${dfavs.includes(t)?'on':''}" data-act="dfav" data-v="${esc(t)}" aria-label="よく使う言葉に${dfavs.includes(t)?'登録済み':'追加'}">${dfavs.includes(t)?'★':'☆'}</button><div style="min-width:0;flex:1"><b>${esc(t)}</b> <span class="small muted">${esc(r)}</span><div class="small">${esc(d)}</div></div>${ins?`<button class="btn ghost dins" data-act="dins" data-v="${esc(t)}">入れる</button>`:''}</div>`).join('')+(hits.length>80?`<p class="small muted">ほか${hits.length-80}件。もう1文字入れると絞り込めます。</p>`:'')
+  :'<p class="small muted" style="margin:10px 0">見つかりませんでした。</p>'}
 function dictSheet(){
-  const heads=[...new Set(DICT.map(d=>seion(d[1][0])))].sort((a,b)=>GOJU.indexOf(a)-GOJU.indexOf(b));
+  const ins=editing()&&sheet&&sheet.ins;const act=ins?'dins':'dpick';
+  const chip=(t,x)=>`<span class="pk"><button class="chip" data-act="${act}" data-v="${esc(t)}">${esc(t)}</button>${x?`<button class="pkx" data-act="dfav" data-v="${esc(t)}" aria-label="${esc(t)}を外す">×</button>`:''}</span>`;
+  const picks=autoPicks();
   return `<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true">
     <h3>野球用語辞典</h3>
     <input id="dq" type="search" value="${esc(dictQ)}" placeholder="頭文字を入力（例：す → スクイズ）" autocomplete="off" data-keep="no">
-    <div class="dheads">${heads.map(h=>`<button class="chip mini" data-act="dhead" data-v="${h}">${h}</button>`).join('')}</div>
+    <div class="pkbox"><div class="pkh"><span>★ よく使う言葉（自分で選択）</span>${dfavs.length?`<button class="x" data-act="favedit">${favEdit?'完了':'編集'}</button>`:''}</div>
+      <div class="pks">${dfavs.length?dfavs.map(t=>chip(t,favEdit)).join(''):'<span class="small muted">検索結果の☆を押すと、ここに追加されます。</span>'}</div></div>
+    <div class="pkbox auto"><div class="pkh"><span>✦ よく使っている言葉（自動で選出）</span></div>
+      <div class="pks">${picks.map(t=>chip(t,false)).join('')}</div>
+      <div class="small muted">これまでのコメントと「入れる」の回数から自動で選んでいます。上で選んだ言葉は除きます。</div></div>
+    ${ins?'':'<p class="small muted" style="margin:0">言葉をタップすると説明が出ます。</p>'}
     <div id="dres" class="dres">${dictResults()}</div>
     <button class="btn ghost" data-act="close">閉じる</button></div></div>`;
 }
