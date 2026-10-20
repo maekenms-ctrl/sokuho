@@ -359,6 +359,12 @@ a.btn{text-decoration:none;display:inline-flex;align-items:center;justify-conten
 table.ls td.jmp{cursor:pointer}
 table.ls td.jmp:active{filter:brightness(1.4)}
 .card.hl{box-shadow:0 0 0 3px var(--accent);transition:box-shadow .3s}
+.lulist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.lulist li{display:grid;grid-template-columns:22px 26px 34px 1fr;gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--line)}
+.lulist li:first-child{border-top:0}
+.lulist .lo{font-weight:700;color:var(--muted);text-align:center}
+.lulist .lpz{background:var(--ink);color:var(--surface);border-radius:5px;text-align:center;font-weight:700;font-size:13px;padding:1px 0}
+.lulist .lno{color:var(--accent);font-weight:700;font-size:18px;text-align:right}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -780,6 +786,7 @@ function renderLive(g,S){
     const seqRow=`<div class="row" style="justify-content:space-between;flex-wrap:nowrap;min-height:28px">${seq||'<span class="small muted">この打席の投球はまだありません</span>'}<button class="undo1" data-act="undo">↶ 1つ戻す</button></div>`;
     sit=ed?`<div class="card pad stack" id="livecard">${head}${cnt}${seqRow}${mu}${field}</div>`:`<div class="card pad stack">${head}${seq}${mu}${field}</div>`;
   }
+  const preCard=!started?preGameCard(g,S):'';
   const panel=editing()&&!S.ended?inputPanel(g,S):(editing()&&S.ended?`<div class="card pad row"><span class="muted small" style="flex:1">試合終了の記録を取り消すと再開できます。</span><button class="btn ghost" data-act="undo">取り消し</button></div>`:'');
   const abEntries=S.log.filter(l=>l.kind==='pa'||l.kind==='tail');const recentAB=abEntries.slice(-5);
   const upd=g.updatedAt?new Date(g.updatedAt):null;
@@ -792,7 +799,7 @@ function renderLive(g,S){
   const benchBar=editing()?`<div class="card pad row" style="justify-content:space-between"><span class="small muted">ベンチ：${g.bench==='1'?'一塁側':g.bench==='3'?'三塁側':'未定'}</span><div class="seg" style="flex:0 0 auto">${[['1','一塁側'],['3','三塁側']].map(([k,l])=>`<button aria-pressed="${g.bench===k}" data-act="bench" data-v="${k}">${l}</button>`).join('')}</div></div>`:'';
   const uniBar=editing()?`<div class="card pad row" style="justify-content:space-between"><span class="small muted">背番号：${UNI[g.uniform||'1']}ユニフォーム</span><div class="seg" style="flex:0 0 auto">${['1','2'].map(u=>`<button aria-pressed="${(g.uniform||'1')===u}" data-act="uni" data-v="${u}"><img class="uimg" src="uni${u}.png" alt="" style="vertical-align:middle;margin-right:4px">${UNI[u]}</button>`).join('')}</div></div>`:'';
   const delBar=isScorer()&&scorer?`<div class="row" style="justify-content:flex-end"><button class="x" data-act="gamedel" data-v="${g.id}" style="color:var(--danger)">この試合のデータを削除</button></div>`:'';
-  return sit+panel+noteCard+plays+uniBar+benchBar+delBar;
+  return preCard+sit+panel+noteCard+plays+uniBar+benchBar+delBar;
 }
 function pitchLines(seq,idx,cnt,lastText,code,ed){
   const PD={B:'ボール',S:'見逃しストライク',W:'空振りストライク',F:'ファウル'};
@@ -840,6 +847,23 @@ function abItem(e,num,S,opened){
   const name=e.us?`${e.slot+1}番：${esc(e.who)}`:`${e.slot+1}番：${esc(e.who.replace(/^相手\d+番$/,'相手'))}`;
   return `<li class="abx"><details data-ab="${key}" ${isOpen?'open':''}><summary><span class="abn num">${num}</span><span class="abh">${name}　<span class="muted">${sitText(e.ab&&e.ab.pre)}</span></span>${ed?`<button class="x abfix" data-act="fix" data-v="${e.ei}">訂正</button>`:''}<span class="chev" aria-hidden="true"></span></summary>
     <ol class="plines">${lines.join('')}</ol></details><ol class="plines collapsed-last">${lastLine}</ol></li>`;
+}
+function preGameCard(g,S){
+  const rows=g.lineup.map((x,i)=>{const p=g.players[x.pid]||{};return `<li><span class="lo num">${i+1}</span><span class="lpz">${x.pos}</span><span class="lno num">${esc(p.num||'')}</span><span class="nm">${esc(p.name||'')}</span></li>`}).join('');
+  const dh=g.lineup.some(x=>x.pos==='指');const sp=g.players[g.startPitcher]||{};
+  return `<div class="card pad stack"><div class="row" style="justify-content:space-between"><h2 style="margin:0">スターティングメンバー</h2>${editing()?`<button class="btn" data-act="editlu" style="padding:8px 14px">スタメンを変更</button>`:''}</div>
+    <ul class="lulist">${rows}</ul>${dh?`<div class="small">先発投手　<b>${esc(sp.num?'#'+sp.num+' ':'')}${esc(sp.name||'')}</b></div>`:''}
+    ${editing()?'<p class="small muted" style="margin:0">試合が始まる（1球目を入力する）までは、何度でも変更できます。</p>':''}</div>`;
+}
+function editLuSheet(g){
+  const sorted=team.players.slice().sort((a,b)=>(+a.num||999)-(+b.num||999));
+  const opt=(sel)=>`<option value="">選手を選ぶ</option>`+sorted.map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${esc(numFor(p,g)||'-')} ${esc(p.name)}</option>`).join('');
+  const rows=[...Array(9)].map((_,i)=>{const x=g.lineup[i]||{};return `<span class="n">${i+1}</span><select id="elu${i}" data-keep="no">${opt(x.pid)}</select><select id="elp${i}" data-keep="no">${POS.map(q=>`<option ${q===x.pos?'selected':''}>${q}</option>`).join('')}</select>`}).join('');
+  return `<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true"><h3>スタメンを変更</h3>
+    <form class="form" data-form="editlu"><div class="lu">${rows}</div>
+    <label class="f">先発投手（指名打者を使うときだけ選ぶ）<select id="el_sp" data-keep="no">${opt(g.lineup.some(x=>x.pos==='投')?'':g.startPitcher)}</select></label>
+    <button class="btn" type="submit">この内容で保存</button></form>
+    <button class="btn ghost" data-act="close">閉じる</button></div></div>`;
 }
 function liveAtBat(S){
   if(S.ended||!S.cur||!S.cur.items.length)return '';
@@ -987,6 +1011,7 @@ function pickList(players,act,extra=''){return players.length?`<div class="pick"
 function renderSheet(g,S){
   if(sheet.type==='login')return loginSheet();
   if(sheet.type==='ginfo')return ginfoSheet();
+  if(sheet.type==='editlu')return g?editLuSheet(g):'';
   if(sheet.type==='dict')return dictSheet();
   let body='';
   if(!g||!S){sheet=null;return''}
@@ -1146,6 +1171,7 @@ document.addEventListener('click',ev=>{
     case'undo':undo();break;
     case'runner':sheet={type:'runner',base:+v};render();break;
     case'fmode':fieldMode=v;render();break;
+    case'editlu':{const g2=cur();if(g2&&g2.events&&g2.events.length){toast('試合が始まっているため、選手交代から変更してください');break}sheet={type:'editlu'};render();break}
     case'jumpinn':{const g2=cur();if(!g2)break;const S2=replay(g2);S2.log.filter(l=>l.kind==='pa'&&(l.inning+'_'+l.half)===v).forEach(l=>{abOpen.add(String(l.ei));abOpen.delete('x'+l.ei)});
       tab='log';sheet=null;render();const card=document.getElementById('half-'+v);
       if(card){const h=document.querySelector('.top')?.offsetHeight||0;window.scrollTo({top:card.getBoundingClientRect().top+window.scrollY-h-10,behavior:RM()?'auto':'smooth'});card.classList.add('hl');setTimeout(()=>card.classList.remove('hl'),1600)}
@@ -1229,6 +1255,20 @@ document.addEventListener('change',ev=>{
   if(/^lp\d$/.test(el.id))dhToggle();
   if(el.id==='ng_uni')uniLabels();
 });
+function readLineup(lu,lp,spId){
+  const lineup=[];const seen=new Set();
+  for(let i=0;i<9;i++){const pid=document.getElementById(lu+i).value;const pos=document.getElementById(lp+i).value;
+    if(!pid){toast(`${i+1}番の選手を選んでください`);return null}if(seen.has(pid)){toast('同じ選手が2回選ばれています');return null}seen.add(pid);lineup.push({pid,pos})}
+  const pIn=lineup.filter(x=>x.pos==='投');const hasDH=lineup.some(x=>x.pos==='指');
+  const dup=lineup.map(x=>x.pos).find((p,i,a)=>a.indexOf(p)!==i);if(dup){toast(`守備位置「${dup}」が2人います`);return null}
+  const lack=['捕','一','二','三','遊','左','中','右'].filter(p=>!lineup.some(x=>x.pos===p));if(lack.length){toast(`守備位置「${lack.join('・')}」の選手がいません`);return null}
+  if(hasDH&&pIn.length){toast('指名打者を使うときは、打順に「投」を入れず、先発投手を別に選んでください');return null}
+  let sp=pIn[0];
+  if(!sp){if(!hasDH){toast('守備位置「投」の選手を入れるか、指名打者（指）を使う場合は先発投手を選んでください');return null}
+    const spid=document.getElementById(spId).value;if(!spid){toast('先発投手を選んでください');return null}
+    if(seen.has(spid)){toast('先発投手は打順に入っていない選手を選んでください');return null}sp={pid:spid}}
+  return {lineup,sp};
+}
 function addPlayer(g,pid){if(!g.players[pid]){const p=team.players.find(x=>x.id===pid);if(p)g.players[pid]={num:numFor(p,g),name:p.name}}}
 function syncGameNums(pl){Object.values(games).forEach(gm=>{if(gm.players&&gm.players[pl.id]&&!replay(gm).ended){gm.players[pl.id]={num:numFor(pl,gm),name:pl.name};saveGame(gm.id)}})}
 document.addEventListener('submit',ev=>{
@@ -1252,22 +1292,7 @@ document.addEventListener('submit',ev=>{
   }
   if(f==='newgame'){
     const opp=document.getElementById('ng_opp').value.trim();if(!opp){toast('相手チームを入力してください');return}
-    const lineup=[];const seen=new Set();
-    for(let i=0;i<9;i++){const pid=document.getElementById('lu'+i).value;const pos=document.getElementById('lp'+i).value;
-      if(!pid){toast(`${i+1}番の選手を選んでください`);return}if(seen.has(pid)){toast('同じ選手が2回選ばれています');return}seen.add(pid);lineup.push({pid,pos})}
-    const pIn=lineup.filter(x=>x.pos==='投');const hasDH=lineup.some(x=>x.pos==='指');
-    const dup=lineup.map(x=>x.pos).find((p,i,a)=>a.indexOf(p)!==i);if(dup){toast(`守備位置「${dup}」が2人います`);return}
-    const lack=['捕','一','二','三','遊','左','中','右'].filter(p=>!lineup.some(x=>x.pos===p));if(lack.length){toast(`守備位置「${lack.join('・')}」の選手がいません`);return}
-    if(hasDH&&pIn.length){toast('指名打者を使うときは、打順に「投」を入れず、下の欄で先発投手を選んでください');return}
-    if(pIn.length>1){toast('守備位置「投」が2人います');return}
-    let sp=pIn[0];
-    if(!sp){
-      if(!hasDH){toast('守備位置「投」の選手を入れるか、指名打者（指）を使う場合は先発投手を選んでください');return}
-      const spid=document.getElementById('ng_sp').value;
-      if(!spid){toast('先発投手を選んでください');document.getElementById('ng_sp').focus();return}
-      if(seen.has(spid)){toast('先発投手は打順に入っていない選手を選んでください');return}
-      sp={pid:spid};
-    }
+    const rl=readLineup('lu','lp','ng_sp');if(!rl)return;const {lineup,sp}=rl;
     const uniform=document.getElementById('ng_uni').value;const players={};team.players.forEach(p=>players[p.id]={num:numFor(p,{uniform}),name:p.name});
     const id=uid();
     games[id]={id,createdAt:Date.now(),updatedAt:Date.now(),usName:team.name||'自チーム',opponent:opp,date:document.getElementById('ng_date').value,time:document.getElementById('ng_time').value||'',
@@ -1283,6 +1308,10 @@ document.addEventListener('submit',ev=>{
     else team.rules.push({id:uid(),title:t,body:bd,src,at:Date.now()});
     ruleEdit=null;saveTeam();toast('ルールメモを保存しました');render()}
   if(f==='login'){doLogin();return}
+  if(f==='editlu'){const gm=cur();if(!gm)return;if(gm.events&&gm.events.length){toast('試合が始まっているため変更できません');return}
+    const rl=readLineup('elu','elp','el_sp');if(!rl)return;
+    gm.lineup=rl.lineup;gm.startPitcher=rl.sp.pid;[...rl.lineup.map(x=>x.pid),rl.sp.pid].forEach(pid=>addPlayer(gm,pid));
+    gm.updatedAt=Date.now();saveGame(gm.id);sheet=null;toast('スタメンを変更しました');render();return}
   if(f==='ginfo'){const gm=games[sheet.gid];if(!gm)return;const v=id=>document.getElementById(id).value.trim();
     const opp=v('gi_opp');if(!opp){toast('相手チームを入力してください');return}
     Object.assign(gm,{tour:v('gi_tour'),kind:document.getElementById('gi_kind').value,venue:v('gi_venue'),addr:v('gi_addr'),opponent:opp,date:v('gi_date')||gm.date,time:v('gi_time'),updatedAt:Date.now()});
