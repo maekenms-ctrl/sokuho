@@ -356,6 +356,9 @@ details[open]>summary .chev{border-top:0;border-bottom:7px solid var(--ink)}
 .ginfo{display:flex;flex-direction:column;gap:6px;background:var(--soft);border-radius:10px;padding:12px}
 a.btn{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
 .gedit summary{cursor:pointer;font-weight:700;font-size:14px}
+table.ls td.jmp{cursor:pointer}
+table.ls td.jmp:active{filter:brightness(1.4)}
+.card.hl{box-shadow:0 0 0 3px var(--accent);transition:box-shadow .3s}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -619,7 +622,7 @@ function renderTop(g,S){
         if(h===1&&S.ended&&v==null&&i===S.score[0].length-1&&S.tot[1]>S.tot[0])txt='X';
         if(h===1&&S.walkoff&&i===S.inning-1)txt=v+'X';
         const isCur=!S.ended&&g.events&&g.events.length&&S.inning-1===i&&S.half===h;
-        r+=`<td class="${isCur?'cur':''}">${txt}</td>`}
+        r+=`<td class="${isCur?'cur':''} ${txt!==''?'jmp':''}" ${txt!==''?`data-act="jumpinn" data-v="${i+1}_${h}" role="button" aria-label="${i+1}回${h?'裏':'表'}の経過を見る"`:''}>${txt}</td>`}
       const fl=lastTot&&lastTot.g===g.id&&lastTot.t[h]!==S.tot[h]&&!RM();return r+`<td class="tot ${fl?'flash':''}">${S.tot[h]}</td><td class="sum">${S.hits[h]}</td></tr>`}).join('');
     lastTot={g:g.id,t:S.tot.slice()};
     ls=`<div class="lsx"><table class="ls num" data-k="${esc(g.id+JSON.stringify(S.score)+S.hits)}"><thead>${hd}</thead><tbody>${rows}</tbody></table></div>`;
@@ -894,7 +897,7 @@ function renderLog(g,S){
   if(!groups.length)return `<div class="card empty"><p class="muted">まだ記録がありません。</p></div>`;
   const tools=`<div class="row" style="justify-content:flex-end;gap:6px"><button class="chip mini" data-act="aball" data-v="1">すべて広げる</button><button class="chip mini" data-act="aball" data-v="0">すべてたたむ</button></div>`;
   return tools+groups.map(gr=>{const label=`${gr.inning}回${gr.half?'裏':'表'}`;const nb=commentList(g,gr.k,false);
-    return `<div class="card"><div class="half">${label}　${esc(gr.half?b:t)}の攻撃</div><div class="pad" style="padding-top:8px;display:flex;flex-direction:column;gap:8px">${nb}${gr.items.length?`<ul class="plays abl">${abList(gr.items.filter(x=>x.kind==='pa'||x.kind==='tail'),S,false).join('')}</ul>`:''}</div></div>`}).join('');
+    return `<div class="card" id="half-${gr.k}"><div class="half">${label}　${esc(gr.half?b:t)}の攻撃</div><div class="pad" style="padding-top:8px;display:flex;flex-direction:column;gap:8px">${nb}${gr.items.length?`<ul class="plays abl">${abList(gr.items.filter(x=>x.kind==='pa'||x.kind==='tail'),S,false).join('')}</ul>`:''}</div></div>`}).join('');
 }
 function ipStr(o){return Math.floor(o/3)+(o%3?'.'+o%3:'')}
 function renderStats(g,S){
@@ -1143,6 +1146,10 @@ document.addEventListener('click',ev=>{
     case'undo':undo();break;
     case'runner':sheet={type:'runner',base:+v};render();break;
     case'fmode':fieldMode=v;render();break;
+    case'jumpinn':{const g2=cur();if(!g2)break;const S2=replay(g2);S2.log.filter(l=>l.kind==='pa'&&(l.inning+'_'+l.half)===v).forEach(l=>{abOpen.add(String(l.ei));abOpen.delete('x'+l.ei)});
+      tab='log';sheet=null;render();const card=document.getElementById('half-'+v);
+      if(card){const h=document.querySelector('.top')?.offsetHeight||0;window.scrollTo({top:card.getBoundingClientRect().top+window.scrollY-h-10,behavior:RM()?'auto':'smooth'});card.classList.add('hl');setTimeout(()=>card.classList.remove('hl'),1600)}
+      else{window.scrollTo(0,0);toast('この回の記録はまだありません')}break}
     case'ginfo':sheet={type:'ginfo',gid:v};render();break;
     case'mapline':{const gm=games[sheet.gid];if(gm)location.href='https://line.me/R/share?text='+encodeURIComponent(mapText(gm));break}
     case'mapcopy':{const gm=games[sheet.gid];if(!gm)break;(navigator.clipboard?navigator.clipboard.writeText(mapText(gm)):Promise.reject()).then(()=>toast('コピーしました')).catch(()=>toast('コピーできませんでした。「地図を開く」から共有してください'));break}
