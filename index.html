@@ -365,6 +365,13 @@ table.ls td.jmp:active{filter:brightness(1.4)}
 .lulist .lo{font-weight:700;color:var(--muted);text-align:center}
 .lulist .lpz{background:var(--ink);color:var(--surface);border-radius:5px;text-align:center;font-weight:700;font-size:13px;padding:1px 0}
 .lulist .lno{color:var(--accent);font-weight:700;font-size:18px;text-align:right}
+.spbox{display:flex;align-items:center;gap:12px;background:var(--board);color:#fff;border-radius:12px;padding:12px 16px;border-left:6px solid var(--accent)}
+.splab{font-size:12px;font-weight:700;background:var(--accent);color:var(--accent-ink);border-radius:99px;padding:3px 10px;white-space:nowrap}
+.spno{font-size:34px;font-weight:800;color:#FF9A4D;line-height:1}
+.spnm{font-size:22px;font-weight:800;min-width:0;overflow-wrap:anywhere}
+.spdh{margin-left:auto;font-size:11px;color:var(--chalk-dim);white-space:nowrap}
+.lulist li.isp{background:var(--note-bg);border-radius:6px}
+.lulist li.isp .nm{font-weight:800}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -849,10 +856,11 @@ function abItem(e,num,S,opened){
     <ol class="plines">${lines.join('')}</ol></details><ol class="plines collapsed-last">${lastLine}</ol></li>`;
 }
 function preGameCard(g,S){
-  const rows=g.lineup.map((x,i)=>{const p=g.players[x.pid]||{};return `<li><span class="lo num">${i+1}</span><span class="lpz">${x.pos}</span><span class="lno num">${esc(p.num||'')}</span><span class="nm">${esc(p.name||'')}</span></li>`}).join('');
+  const rows=g.lineup.map((x,i)=>{const p=g.players[x.pid]||{};return `<li class="${x.pid===g.startPitcher?'isp':''}"><span class="lo num">${i+1}</span><span class="lpz">${x.pos}</span><span class="lno num">${esc(p.num||'')}</span><span class="nm">${esc(p.name||'')}</span></li>`}).join('');
   const dh=g.lineup.some(x=>x.pos==='指');const sp=g.players[g.startPitcher]||{};
   return `<div class="card pad stack"><div class="row" style="justify-content:space-between"><h2 style="margin:0">スターティングメンバー</h2>${editing()?`<button class="btn" data-act="editlu" style="padding:8px 14px">スタメンを変更</button>`:''}</div>
-    <ul class="lulist">${rows}</ul>${dh?`<div class="small">先発投手　<b>${esc(sp.num?'#'+sp.num+' ':'')}${esc(sp.name||'')}</b></div>`:''}
+    <ul class="lulist">${rows}</ul>
+    <div class="spbox"><span class="splab">先発投手</span><span class="spno num">${esc(sp.num||'')}</span><span class="spnm">${esc(sp.name||'')}</span>${dh?'<span class="spdh">指名打者制</span>':''}</div>
     ${editing()?'<p class="small muted" style="margin:0">試合が始まる（1球目を入力する）までは、何度でも変更できます。</p>':''}</div>`;
 }
 function editLuSheet(g){
