@@ -133,14 +133,14 @@ h2{font-size:13px;letter-spacing:.06em;color:var(--muted);margin:0 0 8px;font-we
 .plays .run{color:var(--danger);font-weight:700}
 .seq{display:flex;flex-wrap:wrap;gap:3px;grid-column:2}
 .pc{width:18px;height:18px;border-radius:50%;font-size:10px;display:grid;place-items:center;font-weight:700;color:#0b1a12}
-.pc.B{background:var(--lamp-b)}.pc.S,.pc.W,.pc.F{background:var(--lamp-s)}.pc.X{background:var(--inplay);color:#fff}
+.pc.B{background:var(--lamp-b)}.pc.S{background:var(--lamp-s)}.pc.W{background:#13284B;color:#F6C232;box-shadow:inset 0 0 0 1.5px #F6C232}.pc.F{background:#fff;color:#13284B;box-shadow:inset 0 0 0 1.5px #13284B}.pc.X{background:var(--inplay);color:#fff}
 .half{font-size:14px;font-weight:700;padding:10px 14px;background:var(--soft);border-radius:8px 8px 0 0}
 
 /* input panel */
 .panel{display:flex;flex-direction:column;gap:12px}
 .cnt{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .big{border:0;border-radius:10px;padding:16px 4px;font-size:16px;font-weight:700;min-height:58px}
-.big.B{background:var(--lamp-b);color:#06210f}.big.S{background:var(--lamp-s);color:#2a1d00}.big.W{background:#E0A11A;color:#231700}.big.F{background:var(--soft);border:1px solid var(--line)}
+.big.B{background:var(--lamp-b);color:#06210f}.big.S{background:var(--lamp-s);color:#2a1d00}.big.W{background:#13284B;color:#F6C232;box-shadow:inset 0 0 0 3px #F6C232}.big.F{background:var(--soft);border:1px solid var(--line)}
 .dirs{display:flex;gap:5px;flex-wrap:wrap}
 .chip{border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:6px 11px;font-size:14px;font-weight:700;min-width:40px}
 .chip[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
@@ -278,6 +278,9 @@ button{touch-action:manipulation;-webkit-user-select:none;user-select:none}
 .selsum .x{color:var(--surface);padding:0 6px}
 .undo1{border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:6px 12px;font-weight:700;font-size:13px;flex:0 0 auto}
 .big{min-height:64px;font-size:16px;padding-inline:0;white-space:nowrap;letter-spacing:-.02em}
+.share{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:12px}
+.btn.line{background:#06C755;color:#fff}
+.shprev{margin:0;white-space:pre-wrap;font-family:var(--f-body);font-size:13px;background:var(--soft);border-radius:8px;padding:10px 12px;-webkit-user-select:text;user-select:text;overflow-wrap:anywhere}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -632,7 +635,7 @@ function renderLive(g,S){
   let sit='';
   if(S.ended){
     const w=S.tot[0]===S.tot[1]?'引き分け':`${S.tot[0]>S.tot[1]?t:b} の勝ち`;
-    sit=`<div class="card pad"><h2>試合終了</h2><div style="font-size:22px;font-weight:700">${esc(t)} <span class="num">${S.tot[0]} - ${S.tot[1]}</span> ${esc(b)}</div><div class="muted">${esc(w)}</div></div>`;
+    sit=`<div class="card pad stack"><div><h2>試合終了</h2><div style="font-size:22px;font-weight:700">${esc(t)} <span class="num">${S.tot[0]} - ${S.tot[1]}</span> ${esc(b)}</div><div class="muted">${esc(w)}</div></div>${shareBox(g,S)}</div>`;
   }else{
     const B=S.batter;const usBat=B.us;
     const bNo=usBat&&g.players[B.pid]&&g.players[B.pid].num?` #${esc(g.players[B.pid].num)}`:'';
@@ -946,6 +949,9 @@ document.addEventListener('click',ev=>{
     case'undo':undo();break;
     case'runner':sheet={type:'runner',base:+v};render();break;
     case'fmode':fieldMode=v;render();break;
+    case'shline':{const g2=cur();if(!g2)break;const txt=resultText(g2,replay(g2));location.href='https://line.me/R/share?text='+encodeURIComponent(txt);break}
+    case'shmore':{const g2=cur();if(!g2)break;const txt=resultText(g2,replay(g2));if(navigator.share)navigator.share({text:txt}).catch(()=>{});else toast('この端末では使えません。「文章をコピー」を使ってください');break}
+    case'shcopy':{const g2=cur();if(!g2)break;const txt=resultText(g2,replay(g2));(navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>toast('コピーしました。LINEに貼り付けてください')).catch(()=>{const pre=document.querySelector('.shprev');if(pre){const r=document.createRange();r.selectNodeContents(pre);const sel=getSelection();sel.removeAllRanges();sel.addRange(r)}toast('文章を選択しました。長押しでコピーしてください')});break}
     case'dictopen':sheet={type:'dict',ins:v==='ins'};render();setTimeout(()=>document.getElementById('dq')?.focus(),60);break;
     case'dhead':{dictQ=v;const q=document.getElementById('dq');if(q)q.value=v;const r=document.getElementById('dres');if(r)r.innerHTML=dictResults();break}
     case'dins':{const box=document.getElementById('cbox');cDraft=(box?box.value:cDraft)+v;sheet=null;render();const b2=document.getElementById('cbox');if(b2){b2.focus();b2.setSelectionRange(b2.value.length,b2.value.length)}toast(`「${v}」を入れました`);break}
@@ -1206,6 +1212,35 @@ function dictSheet(){
     <div id="dres" class="dres">${dictResults()}</div>
     <button class="btn ghost" data-act="close">閉じる</button></div></div>`;
 }
+/* ---------- share ---------- */
+function gameUrl(g){return location.origin+location.pathname+'#g='+g.id}
+function resultText(g,S){
+  const [t,b]=teamNames(g);const us=g.weTop?0:1;const my=S.tot[us],op=S.tot[1-us];
+  const res=S.ended?(my>op?'勝利！':my<op?'敗戦':'引き分け'):`${S.inning}回${S.half?'裏':'表'}まで（試合中）`;
+  const n=Math.max(g.innings,S.score[0].length);
+  const line=h=>{let r=[];for(let i=0;i<n;i++){let v=S.score[h][i];r.push(v==null?(h===1&&S.ended&&i===S.score[0].length-1&&S.tot[1]>S.tot[0]?'X':'-'):v)}return r.join(' ')};
+  const short=x=>{const y=x.replace(/リトルシニア|シニア|ボーイズ|ヤング|ポニー/g,'').trim()||x;return y.length>8?y.slice(0,8):y};
+  const L=[];
+  L.push(`【${S.ended?'試合結果':'途中経過'}】${gdate(g)}${g.venue?' '+g.venue:''}`);
+  L.push(`${g.usName} ${my}-${op} ${g.opponent}　${res}`);
+  L.push('');
+  L.push(`${short(t)}　${S.tot[0]}点`,`　${line(0)}`);
+  L.push(`${short(b)}　${S.tot[1]}点`,`　${line(1)}`);
+  const ps=S.pitOrder.filter(k=>k.startsWith('u:')&&S.pit[k].bf).map(k=>surname(S.pname(k.slice(2))));
+  if(ps.length)L.push('',`投手：${ps.join('→')}`);
+  const hr=S.log.filter(l=>l.kind==='pa'&&l.us&&l.code==='HR').map(l=>surname(l.who));
+  const xb=S.log.filter(l=>l.kind==='pa'&&l.us&&(l.code==='2B'||l.code==='3B')).map(l=>surname(l.who)+(l.code==='3B'?'(三)':'(二)'));
+  if(hr.length)L.push(`本塁打：${hr.join('、')}`);
+  if(xb.length)L.push(`長打：${xb.join('、')}`);
+  L.push('',`▼試合の詳細（スコア・経過・成績）`,gameUrl(g));
+  return L.join('\n');
+}
+function shareBox(g,S){
+  return `<div class="share"><div class="lbl" style="margin:0">試合結果を共有</div>
+    <div class="row"><button class="btn line" data-act="shline">LINEで送る</button><button class="btn ghost" data-act="shmore">ほかのアプリ</button><button class="btn ghost" data-act="shcopy">文章をコピー</button></div>
+    <pre class="shprev">${esc(resultText(g,S))}</pre></div>`;
+}
+
 /* ---------- comments ---------- */
 let cDraft='',cEdit=null,cEditKey=null;
 function commentsFor(g,key){const out=[];const n=g.notes&&g.notes[key];if(n&&n.text)out.push({id:'n:'+key,t:n.text,at:n.at||0});
@@ -1330,7 +1365,8 @@ function dhToggle(){const row=document.getElementById('ng_sprow');if(!row)return
   db.enablePersistence({synchronizeTabs:true}).catch(()=>{});
   auth=firebase.auth();
   auth.onAuthStateChanged(resolveRole);
-  const done=()=>{if(loaded.team&&loaded.games&&!booted){booted=true;if(!viewId)viewId=currentId&&games[currentId]?currentId:null}render()};
+  const hashId=(location.hash.match(/^#g=([A-Za-z0-9_-]+)/)||[])[1]||null;
+  const done=()=>{if(loaded.team&&loaded.games&&!booted){booted=true;if(hashId&&games[hashId]){viewId=hashId;tab='live'}else if(!viewId)viewId=currentId&&games[currentId]?currentId:null}render()};
   db.doc('team/main').onSnapshot(s=>{if(s.exists){const d=s.data();team={name:d.name||'',players:(d.players||[]).map(p=>({...p})),rules:(d.rules||[]).map(r=>({...r}))}}loaded.team=true;done()},e=>{loaded.team=true;done()});
   db.doc('meta/current').onSnapshot(s=>{const prev=currentId;currentId=s.exists?s.data().gameId:null;if(booted&&(!viewId||viewId===prev)&&currentId&&games[currentId])viewId=currentId;render()},()=>{});
   db.collection('games').onSnapshot({includeMetadataChanges:true},snap=>{
@@ -1343,6 +1379,7 @@ function dhToggle(){const row=document.getElementById('ng_sprow');if(!row)return
     if(!typing||!booted)done();
   },e=>{loaded.games=true;done();toast('試合データを読み込めませんでした。ページを開き直してください')});
   addEventListener('online',()=>{offline=false;render()});addEventListener('offline',()=>{offline=true;render()});
+  addEventListener('hashchange',()=>{const m=location.hash.match(/^#g=([A-Za-z0-9_-]+)/);if(m&&games[m[1]]){viewId=m[1];tab='live';render()}});
   if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 })();
 </script>
