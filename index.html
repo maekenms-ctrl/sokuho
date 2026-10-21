@@ -407,6 +407,48 @@ table.ls td.jmp:active{filter:brightness(1.4)}
 .zt{font-size:9px;fill:var(--muted);font-family:var(--f-body)}
 .zonepad.zed{cursor:crosshair}
 .zonepad{max-width:330px!important}
+
+/* 分析・レポート */
+:root{--c0:#C9D0DB;--c1:#2a78d6;--c2:#eb6834;--c3:#1baf7a;--c4:#eda100}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--c0:#4A5568;--c1:#3987e5;--c2:#d95926;--c3:#199e70;--c4:#c98500}}
+:root[data-theme="dark"]{--c0:#4A5568;--c1:#3987e5;--c2:#d95926;--c3:#199e70;--c4:#c98500}
+.lock{font-size:11px;font-weight:700;color:var(--accent);border:1px solid var(--accent);border-radius:99px;padding:2px 8px}
+.ana .ah{font-size:14px;margin:6px 0 0;padding-top:8px;border-top:1px solid var(--line)}
+.ana h3.ah:first-of-type{border-top:0;padding-top:0}
+.chart{margin:4px 0 0}.chart figcaption{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart .cl{font-size:10px;fill:currentColor}.chart .cn{font-size:9px;fill:var(--muted)}.chart .cv{font-size:9px;fill:currentColor;font-weight:700}
+.cleg{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:var(--muted);margin-bottom:4px}
+.cleg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+table.an th,table.an td{font-size:12px;padding:5px 6px;white-space:nowrap}
+table.an thead th{font-size:10.5px;line-height:1.3}
+.anote{margin:4px 2px 16px}
+body.rep{background:#fff}
+.rtool{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:8px;padding:10px 16px;background:#13284B;color:#fff}
+.rtool .btn{flex:1}
+.report{--line:#D5DBE5;--muted:#5A6577;--ink:#13284B;--soft:#EEF2F8;--c0:#C9D0DB;--c1:#2a78d6;--c2:#eb6834;--c3:#1baf7a;--c4:#eda100;
+  color:#13284B;background:#fff;max-width:760px;margin:0 auto;padding:16px;color-scheme:light}
+.report .rh{display:flex;justify-content:space-between;gap:12px;align-items:flex-end;border-bottom:3px solid #13284B;padding-bottom:8px;margin-bottom:8px}
+.report h1{font-size:20px;margin:2px 0}.report .rteam{font-size:12px;font-weight:700;color:#F0802E}.report .rsub{font-size:12px}
+.report .rdate{font-size:10px;text-align:right;color:#5A6577}
+.report section{margin:14px 0}.report section>h2{font-size:15px;background:#13284B;color:#fff;padding:4px 10px;border-radius:4px;margin:0 0 6px}
+.report .ah{font-size:13px;margin:10px 0 2px}
+.report table.st{background:#fff;color:#13284B}.report table.st th{color:#5A6577}
+.report .tx{overflow:visible}
+.cgrid{display:grid;gap:12px}
+.report section{break-inside:auto}.report .nb{break-inside:avoid}
+.report .cgrid{grid-template-columns:1fr 1fr;gap:24px;align-items:start}
+.report .chart .cl{font-size:9px}.report .chart .cn,.report .chart .cv{font-size:8px}
+.report table.an th{font-size:9px;padding:3px 4px}.report table.an td{font-size:10.5px;padding:3px 4px}
+.report h3,.report section>h2,.report figcaption{break-after:avoid}
+@media print{
+  @page{size:A4;margin:12mm}
+  body.rep .rtool{display:none}
+  body.rep .report{padding:0;max-width:none}
+  body.rep .report .pb{break-before:page}
+  body.rep .chart,body.rep table{break-inside:avoid}
+  body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -442,6 +484,7 @@ function mapUrl(g){const q=(g.addr||g.venue||'').trim();return q?'https://www.go
 function gdate(g){if(!g||!g.date)return '';const [y,m,d]=g.date.split('-').map(Number);const w='日月火水木金土'[new Date(y,m-1,d).getDay()];return `${m}月${d}日(${w})${g.time?' '+g.time+' 開始':''}`}
 function numFor(p,g){return g&&g.uniform==='2'?(p.num2||p.num||''):(p.num||'')}
 let games={};let currentId=null;let viewId=null;
+
 let tab='live';let sheet=null;let dirSel=null;
 let scorer=lsGet('scorer','1')==='1';
 let loaded={team:false,games:false};
@@ -529,11 +572,11 @@ function replay(g){
     if(code==='K')P.K++;if(code==='BB')P.BB++;if(code==='HBP')P.HBP++;
     const eligible=!['E','DP'].includes(code);
     const kind=code==='K'?(S.seq[S.seq.length-1]==='S'?'見逃し三振':S.seq[S.seq.length-1]==='W'?'空振り三振':'三振'):null;
-    const entry={kind:'pa',who:rname(br),slot:B.slot,us:B.us,code,dir:dir||null,tt:ex&&ex.tt||null,text:(t=>outs>=3&&code==='DP'?t.replace('併殺','三重殺').replace('ダブルプレー','トリプルプレー'):t)(resText(code,dir,kind))+(ex&&ex.f?`（${ex.f}）`:''),seq:S.seq.slice(),seqIdx:S.seqIdx.slice(),seqCnt:S.seqCnt.slice(),auto:!!auto,runs:runs.length,outsAfter:Math.min(3,S.outs+outs)};
+    const entry={kind:'pa',who:rname(br),slot:B.slot,us:B.us,pid:B.us?B.pid:null,ono:B.us?'':((S.oppL[B.slot]||{}).no||''),pkey:pitKey(),code,dir:dir||null,tt:ex&&ex.tt||null,text:(t=>outs>=3&&code==='DP'?t.replace('併殺','三重殺').replace('ダブルプレー','トリプルプレー'):t)(resText(code,dir,kind))+(ex&&ex.f?`（${ex.f}）`:''),seq:S.seq.slice(),seqIdx:S.seqIdx.slice(),seqCnt:S.seqCnt.slice(),auto:!!auto,runs:runs.length,outsAfter:Math.min(3,S.outs+outs)};
     S.bases=S.outs+outs>=3?[null,null,null]:nb;
     runs.forEach(r=>scoreRun(r,eligible&&B.us?B.pid:null));
     entry.score=[tot(0),tot(1)];
-    entry.ab={pre:S.ab.pre||sit(),items:S.ab.items.concat(auto?[]:[{p:'X',ei:S.ei,pt:ex&&ex.pt,loc:ex&&ex.loc}]),pk:S.ab.pk};S.ab={pre:null,items:[],pk:0};
+    entry.ab={pre:S.ab.pre||sit(),items:S.ab.items.concat(auto?[]:[{p:'X',ei:S.ei,pt:ex&&ex.pt,loc:ex&&ex.loc,pk:pitKey()}]),pk:S.ab.pk};S.ab={pre:null,items:[],pk:0};
     log(entry);
     S.order[S.half]++;S.b=0;S.s=0;S.seq=[];S.seqIdx=[];S.seqCnt=[];S.since=0;
     S.lastEligible=eligible;S.lastBatter=B.us?B.pid:null;
@@ -545,7 +588,7 @@ function replay(g){
     if(S.ended&&e.t!=='undo')break;
     if(e.t==='p'){
       const P=pit(pitKey());P.np++;ptc(P,e.pt);S.since++;S.seq.push(e.k);S.seqIdx.push(ei);
-      const pushP=()=>{S.seqCnt.push(`${S.b}-${S.s}`);S.ab.items.push({p:e.k,cnt:`${S.b}-${S.s}`,ei,pt:e.pt,loc:e.loc})};
+      const pushP=()=>{S.seqCnt.push(`${S.b}-${S.s}`);S.ab.items.push({p:e.k,cnt:`${S.b}-${S.s}`,ei,pt:e.pt,loc:e.loc,pk:pitKey()})};
       if(e.k==='B'){S.b++;pushP();if(S.b>=4)pa('BB',null,true)}
       else if(e.k==='S'||e.k==='W'){S.s++;pushP();if(S.s>=3)pa('K',null,true)}
       else if(e.k==='F'){if(S.s<2)S.s++;pushP()}
@@ -663,6 +706,8 @@ function render(){
   const keep=[...document.querySelectorAll('input[id],textarea[id],select[id]')].reduce((o,el)=>(o[el.id]=el.value,o),{});
   const g=cur();const S=g?replay(g):null;
   const keepEls=['svg.field','.bso1','table.ls'].map(sel=>app.querySelector(sel));
+  document.body.classList.toggle('rep',report);
+  if(report){app.innerHTML=renderReport();return}
   app.innerHTML=renderTop(g,S)+`<main><div class="wrap">${renderBody(g,S)}</div></main>`+(sheet?renderSheet(g,S):'');
   for(const id in keep){const el=document.getElementById(id);if(!el||el.dataset.keep==='no')continue;if(el.value!==keep[id]&&(el.dataset.draft==='1'||el.tagName==='SELECT'||el.type==='date'||el.type==='time'||(el.value===''&&keep[id])))el.value=keep[id]}
   ['svg.field','.bso1','table.ls'].forEach((sel,i)=>{const o=keepEls[i],n=app.querySelector(sel);if(o&&n&&o.dataset.k&&o.dataset.k===n.dataset.k)n.replaceWith(o)});
@@ -687,7 +732,7 @@ function renderTop(g,S){
   }else{
     head=`<div class="gamehead"><div><h1>${esc(team.name||'チーム速報')}</h1><div class="sub">試合速報</div></div></div>`;
   }
-  const tabs=[['live','速報'],['log','経過'],['stats','成績'],['games','試合'],['roster','名簿'],['rules','ルール']].concat(isOwner()?[['admin','管理']]:[]);
+  const tabs=[['live','速報'],['log','経過'],['stats','成績'],['games','試合'],['roster','名簿'],['rules','ルール']].concat(isScorer()?[['ana','分析']]:[]).concat(isOwner()?[['admin','管理']]:[]);
   return `<header class="top"><div class="wrap">${head}${ls}<nav class="tabs" role="tablist">${tabs.map(([k,l])=>`<button role="tab" aria-selected="${tab===k}" data-act="tab" data-v="${k}">${l}</button>`).join('')}</nav></div></header>`;
 }
 function renderBody(g,S){
@@ -702,6 +747,7 @@ function renderBody(g,S){
   else if(tab==='rules')main=renderRules();
   else if(tab==='roster')main=renderRoster();
   else if(tab==='games')main=renderGames();
+  else if(tab==='ana')main=renderAna();
   else if(!g)main=noGame();
   else if(tab==='log')main=renderLog(g,S);
   else if(tab==='stats')main=renderStats(g,S);
@@ -1046,6 +1092,128 @@ function renderStats(g,S){
   <div class="card pad"><h2>投手成績　${esc(g.usName)}</h2><div class="tx"><table class="st"><thead>${ph}</thead><tbody>${pt('u:')}</tbody></table></div><div class="tx" style="margin-top:10px"><table class="st"><thead>${ph2}</thead><tbody>${pt2('u:')}</tbody></table></div></div>
   <div class="card pad"><h2>相手投手</h2><div class="tx"><table class="st"><thead>${ph}</thead><tbody>${pt('o:')}</tbody></table></div><div class="tx" style="margin-top:10px"><table class="st"><thead>${ph2}</thead><tbody>${pt2('o:')}</tbody></table></div><p class="small muted" style="margin:8px 0 0">失点は自責・非自責を区別せず、その時点の投手に記録しています。球種・牽制は記録した球だけを数えています。</p></div>`;
 }
+/* ---------- 分析（記録係だけ） ---------- */
+let anaScope='game',anaKind='all',anaSide='us',report=false;
+const BTYPE={GO:'G',LO:'L',FO:'F',DP:'G',SF:'F',IH:'G',FC:'G',HR:'F'};
+const BIP=['1B','IH','2B','3B','HR','GO','LO','FO','DP','SF','FC','E'];
+function pcls(it,code,isLast){
+  if(it.p==='B')return'ball';if(it.p==='S')return'called';if(it.p==='W')return'whiff';if(it.p==='F')return'foul';
+  if(it.p==='X'){if(!isLast)return'inplay';if(code==='K')return'called';if(code==='BB'||code==='HBP')return'ball';if(code==='SAC')return'bunt';return'inplay'}
+  return null}
+function anaCollect(list){
+  const bat={},pit={};
+  const B0=()=>({name:'',PA:0,np:0,sw:0,wh:0,fo:0,ip:0,fpPA:0,fpSw:0,fpTake:0,fpWh:0,fpFo:0,fpOut:0,fpHit:0,G:[0,0],L:[0,0],F:[0,0],unk:0,games:new Set()});
+  const P0=()=>({name:'',np:0,str:0,S:[0,0],C:[0,0],fpN:0,fpStr:0,games:new Set()});
+  list.forEach(g=>{const S=replay(g);
+    const pname=k=>k.startsWith('u:')?S.pname(k.slice(2)):k.slice(2);
+    const addPitch=(it,cls,k)=>{if(!k||!cls||cls==='bunt')return;const P=pit[k]||(pit[k]=P0());P.name=pname(k);P.games.add(g.id);P.np++;const st=cls!=='ball';if(st)P.str++;if(it.pt==='S'||it.pt==='C'){P[it.pt][0]++;if(st)P[it.pt][1]++}};
+    const abs=S.log.filter(l=>(l.kind==='pa'||l.kind==='tail')&&l.ab).map(l=>({e:l,items:l.ab.items.filter(x=>x.p)}));
+    if(S.cur&&S.cur.items)abs.push({e:null,items:S.cur.items.filter(x=>x.p)});
+    abs.forEach(({e,items})=>{const code=e&&e.kind==='pa'?e.code:null;
+      const cl=items.map((it,i)=>pcls(it,code,i===items.length-1&&!!code));
+      items.forEach((it,i)=>addPitch(it,cl[i],it.pk||(e&&e.pkey)));
+      if(code&&items.length){const k0=items[0].pk||e.pkey;if(k0&&pit[k0]&&cl[0]!=='bunt'){pit[k0].fpN++;if(cl[0]!=='ball')pit[k0].fpStr++}}
+      if(!code)return;
+      const key=e.us?'u:'+e.pid:`o:${g.id}:${e.slot}:${e.ono}`;
+      const b=bat[key]||(bat[key]=B0());b.games.add(g.id);b.us=e.us;b.name=e.us?S.pname(e.pid):`${e.slot+1}番${e.ono?' #'+e.ono:''}`;b.ord=e.slot;
+      if(!e.us&&!b.oppOf)b.oppOf=g.opponent;
+      b.PA++;
+      const hit=HITS.includes(code);
+      cl.forEach(c=>{if(!c||c==='bunt')return;b.np++;if(c==='whiff'){b.sw++;b.wh++}else if(c==='foul'){b.sw++;b.fo++}else if(c==='inplay'){b.sw++;b.ip++}});
+      if(items.length&&cl[0]!=='bunt'){b.fpPA++;const c=cl[0];
+        if(c==='whiff'){b.fpSw++;b.fpWh++}else if(c==='foul'){b.fpSw++;b.fpFo++}else if(c==='inplay'){b.fpSw++;hit?b.fpHit++:b.fpOut++}else b.fpTake++}
+      if(BIP.includes(code)){const t=e.tt||BTYPE[code];if(t&&b[t]){b[t][0]++;if(hit)b[t][1]++}else b.unk++}
+    })});
+  return{bat,pit}}
+function anaGames(){
+  if(anaScope==='game'){const g=cur();return g?[g]:[]}
+  return Object.values(games).filter(g=>g.events&&g.events.length&&(anaKind==='all'||g.kind===anaKind)).sort((a,b)=>(a.date||'').localeCompare(b.date||''))}
+const pct=(a,b)=>b?Math.round(100*a/b)+'%':'–';
+const pctN=(a,b)=>b?Math.round(100*a/b):null;
+/* 100%積み上げ横棒 */
+function stackChart(rows,cats,title){
+  if(!rows.length)return'';
+  const W=340,LW=86,RW=30,BH=14,RH=24,top=6,H=top+rows.length*RH+4,bw=W-LW-RW;
+  const bars=rows.map((r,i)=>{const tot=r.v.reduce((a,b)=>a+b,0);const y=top+i*RH;let x=LW;
+    const segs=tot?r.v.map((v,j)=>{if(!v)return'';const w=bw*v/tot;const seg=`<rect x="${(x+1).toFixed(1)}" y="${y}" width="${Math.max(0,w-2).toFixed(1)}" height="${BH}" rx="2" fill="var(--c${cats[j].c})"><title>${esc(r.l)}：${cats[j].n} ${v}（${Math.round(100*v/tot)}%）</title></rect>`;x+=w;return seg}).join(''):`<rect x="${LW}" y="${y}" width="${bw}" height="${BH}" rx="2" fill="none" stroke="var(--line)" stroke-dasharray="3 3"/>`;
+    return `<text class="cl" x="${LW-6}" y="${y+11}" text-anchor="end">${esc(r.l)}</text>${segs}<text class="cn" x="${W-2}" y="${y+11}" text-anchor="end">${tot}</text>`}).join('');
+  const leg=`<div class="cleg">${cats.map(c=>`<span><i style="background:var(--c${c.c})"></i>${c.n}</span>`).join('')}</div>`;
+  return `<figure class="chart">${title?`<figcaption>${title}</figcaption>`:''}${leg}<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title||'')}">${bars}</svg></figure>`}
+/* 割合の横棒（系列ごと） */
+function rateChart(rows,series,title){
+  if(!rows.length)return'';
+  const W=340,LW=86,BH=10,gap=3,RW=40,bw=W-LW-RW;const RH=series.length*(BH+gap)+10;const top=16,H=top+rows.length*RH;
+  const ax=[0,50,100].map(t=>{const x=LW+bw*t/100;return `<line x1="${x}" y1="${top-4}" x2="${x}" y2="${H-6}" stroke="var(--line)" ${t?'stroke-dasharray="2 3"':''}/><text class="cn" x="${x}" y="${top-6}" text-anchor="middle">${t}%</text>`}).join('');
+  const bars=rows.map((r,i)=>{const y0=top+i*RH;return `<text class="cl" x="${LW-6}" y="${y0+series.length*(BH+gap)/2+3}" text-anchor="end">${esc(r.l)}</text>`+series.map((s,j)=>{const v=r.v[j];const y=y0+j*(BH+gap);
+    if(v==null)return `<text class="cn" x="${LW+3}" y="${y+BH-1}">${s.n}なし</text>`;
+    const w=Math.max(2,bw*v/100);return `<rect x="${LW}" y="${y}" width="${w.toFixed(1)}" height="${BH}" rx="2" fill="var(--c${s.c})"><title>${esc(r.l)}：${s.n} ${v}%${r.n&&r.n[j]!=null?'（'+r.n[j]+'球）':''}</title></rect><text class="cv" x="${(LW+w+4).toFixed(1)}" y="${y+BH-1}">${v}%</text>`}).join('')}).join('');
+  const leg=series.length>1?`<div class="cleg">${series.map(s=>`<span><i style="background:var(--c${s.c})"></i>${s.n}</span>`).join('')}</div>`:'';
+  return `<figure class="chart">${title?`<figcaption>${title}</figcaption>`:''}${leg}<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title||'')}">${ax}${bars}</svg></figure>`}
+const FPC=[{n:'見送り',c:0},{n:'空振り',c:1},{n:'ファウル',c:4},{n:'凡打',c:3},{n:'ヒット',c:2}];
+const BTC=[{n:'ヒット',c:2},{n:'凡打',c:3}];
+function anaSections(D,side,forReport){
+  const bats=Object.values(D.bat).filter(b=>side==='us'?b.us:!b.us).sort((a,b)=>(a.ord??9)-(b.ord??9)||b.PA-a.PA);
+  const pits=Object.entries(D.pit).filter(([k])=>k.startsWith(side==='us'?'u:':'o:')).map(([k,P])=>P);
+  const sn=s=>s.length>7?s.slice(0,7)+'…':s;
+  const nm=b=>b.us?surname(b.name):b.name;
+  // 打者
+  const t1=bats.map(b=>`<tr><td class="nm">${esc(b.name)}</td><td>${b.PA}</td><td>${b.np}</td><td><b>${pct(b.sw,b.np)}</b></td><td>${pct(b.wh,b.sw)}</td><td><b>${pct(b.fpSw,b.fpPA)}</b></td><td>${b.fpWh}</td><td>${b.fpFo}</td><td>${b.fpOut}</td><td>${b.fpHit}</td></tr>`).join('');
+  const bb=t=>b=>{const [n,h]=b[t];return `<td>${n}</td><td>${pct(h,n)}</td><td>${pct(n-h,n)}</td>`};
+  const tB=b=>b.G[0]+b.L[0]+b.F[0];
+  const t2=bats.map(b=>`<tr><td class="nm">${esc(b.name)}</td><td>${pct(b.G[0],tB(b))}</td>${bb('G')(b)}<td>${pct(b.F[0],tB(b))}</td>${bb('F')(b)}<td>${pct(b.L[0],tB(b))}</td>${bb('L')(b)}${b.unk?`<td>${b.unk}</td>`:'<td>0</td>'}</tr>`).join('');
+  const sum=k=>bats.reduce((a,b)=>[a[0]+b[k][0],a[1]+b[k][1]],[0,0]);
+  const team=[['ゴロ','G'],['フライ','F'],['ライナー','L']].map(([l,k])=>{const [n,h]=sum(k);return{l,v:[h,n-h]}});
+  const fpRows=bats.filter(b=>b.fpPA).map(b=>({l:sn(nm(b)),v:[b.fpTake,b.fpWh,b.fpFo,b.fpOut,b.fpHit]}));
+  const swRows=bats.filter(b=>b.np).map(b=>({l:sn(nm(b)),v:[pctN(b.sw,b.np),pctN(b.fpSw,b.fpPA)]}));
+  const batHtml=bats.length?`
+   <h3 class="ah">スイング（バットを振った割合）</h3>
+   <div class="cgrid">${rateChart(swRows,[{n:'全投球のスイング率',c:1},{n:'初球スイング率',c:2}],'スイング率')}${stackChart(fpRows,FPC,'初球の結果（打席数の内訳）')}</div>
+   <div class="tx"><table class="st an"><thead><tr><th rowspan="2" style="text-align:left">選手</th><th rowspan="2">打席</th><th rowspan="2">球数</th><th rowspan="2">スイング率</th><th rowspan="2">空振り率</th><th rowspan="2">初球<br>スイング率</th><th colspan="4">初球を振った結果</th></tr><tr><th>空振り</th><th>ファウル</th><th>凡打</th><th>ヒット</th></tr></thead><tbody>${t1}</tbody></table></div>
+   <h3 class="ah">打球の種類と結果</h3>
+   <div class="cgrid">${stackChart(team,BTC,(side==='us'?'チーム全体':'相手チーム全体')+'：打球の種類ごとのヒット／凡打')}</div>
+   <div class="tx"><table class="st an"><thead><tr><th rowspan="2" style="text-align:left">選手</th><th colspan="4">ゴロ</th><th colspan="4">フライ</th><th colspan="4">ライナー</th><th rowspan="2">種類<br>未入力</th></tr><tr>${'<th>割合</th><th>数</th><th>ヒット率</th><th>アウト率</th>'.repeat(3)}</tr></thead><tbody>${t2}</tbody></table></div>`
+   :'<p class="muted small">まだ打席の記録がありません。</p>';
+  // 投手
+  const t3=pits.map(P=>`<tr><td class="nm">${esc(P.name)}</td>${anaScope==='all'?`<td>${P.games.size}</td>`:''}<td>${P.np}</td><td><b>${pct(P.str,P.np)}</b></td><td>${P.S[0]}</td><td>${pct(P.S[1],P.S[0])}</td><td>${P.C[0]}</td><td>${pct(P.C[1],P.C[0])}</td><td>${pct(P.S[0],P.S[0]+P.C[0])}</td><td>${pct(P.fpStr,P.fpN)}</td></tr>`).join('');
+  const pRows=pits.filter(P=>P.np).map(P=>({l:sn(P.name.startsWith('#')?P.name:surname(P.name)),v:[pctN(P.str,P.np),pctN(P.S[1],P.S[0]),pctN(P.C[1],P.C[0])],n:[P.np,P.S[0],P.C[0]]}));
+  const pitHtml=pits.length?`<div class="cgrid">${rateChart(pRows,[{n:'全体',c:3},{n:'ストレート',c:2},{n:'変化球',c:1}],'ストライク率')}</div>
+   <div class="tx"><table class="st an"><thead><tr><th rowspan="2" style="text-align:left">投手</th>${anaScope==='all'?'<th rowspan="2">試合</th>':''}<th rowspan="2">球数</th><th rowspan="2">ストライク率</th><th colspan="2">ストレート</th><th colspan="2">変化球</th><th rowspan="2">直球の<br>割合</th><th rowspan="2">初球<br>ストライク率</th></tr><tr><th>球数</th><th>ストライク率</th><th>球数</th><th>ストライク率</th></tr></thead><tbody>${t3}</tbody></table></div>`
+   :'<p class="muted small">まだ投球の記録がありません。</p>';
+  return{batHtml,pitHtml}}
+function anaNote(){return `<p class="small muted anote">スイング＝空振り・ファウル・打球（バントは除く）。ストライク＝見逃し・空振り・ファウル・打球。ヒット率＝その打球のうちヒットの割合、アウト率＝それ以外（エラー・野選を含む）。打球の種類は「ゴロ／ライナー／フライ」を選んだ打席と、アウトの種類から数えています。</p>`}
+function scopeLabel(list){
+  if(anaScope==='game'){const g=list[0];return g?`${gdate(g).replace(/ .*/,'')}　vs ${g.opponent}${g.tour?'（'+g.tour+'）':''}`:''}
+  const d=list.map(g=>g.date).filter(Boolean);return `通算 ${list.length}試合${anaKind!=='all'?'（'+KIND[anaKind]+'）':''}${d.length?`　${d[0].replace(/-/g,'/')}〜${d.at(-1).replace(/-/g,'/')}`:''}`}
+function renderAna(){
+  if(!isScorer())return `<div class="card empty"><p class="muted">このページは記録係だけが見られます。</p></div>`;
+  const list=anaGames();const D=anaCollect(list);
+  const side=anaScope==='all'?'us':anaSide;
+  const chips=(act,cur,opts)=>opts.map(([k,l])=>`<button class="chip mini" aria-pressed="${cur===k}" data-act="${act}" data-v="${k}">${l}</button>`).join('');
+  const ctrl=`<div class="card pad stack anactl">
+    <div class="row" style="justify-content:space-between"><h2 style="margin:0">分析</h2><span class="lock">記録係だけに表示</span></div>
+    <div class="row" style="gap:6px">${chips('anascope',anaScope,[['game','この試合'],['all','通算']])}</div>
+    ${anaScope==='all'?`<div class="row" style="gap:6px">${chips('anakind',anaKind,[['all','すべて'],['official','公式戦'],['op','OP戦'],['practice','練習試合']])}</div>`:`<div class="row" style="gap:6px">${chips('anaside',anaSide,[['us','自チーム'],['opp','相手チーム']])}</div>`}
+    <div class="small muted">${esc(scopeLabel(list))}${anaScope==='all'?'　※通算は自チームの選手のみ':''}</div>
+    <button class="btn" data-act="report">監督・コーチ用レポート（PDF）を作る</button></div>`;
+  if(!list.length)return ctrl+`<div class="card empty"><p class="muted">${anaScope==='game'?'試合を選ぶと分析できます。':'記録のある試合がありません。'}</p></div>`;
+  const {batHtml,pitHtml}=anaSections(D,side);
+  return ctrl+`<div class="card pad stack ana"><h2>打者</h2>${batHtml}</div><div class="card pad stack ana"><h2>投手</h2>${pitHtml}</div>`+anaNote();
+}
+function renderReport(){
+  const list=anaGames();const D=anaCollect(list);
+  const us=anaSections(D,'us',true);const opp=anaScope==='game'?anaSections(D,'opp',true):null;
+  const g=list[0];const now=new Date();
+  const score=anaScope==='game'&&g?(()=>{const S=replay(g);const [t,b]=teamNames(g);return `${t} ${S.tot[0]} - ${S.tot[1]} ${b}`})():'';
+  return `<div class="rtool"><button class="btn" data-act="print">印刷・PDFで保存</button><button class="btn ghost" data-act="closereport">閉じる</button>
+    <p class="small" style="margin:0;flex-basis:100%">iPhone：「印刷・PDFで保存」→ 右上の共有ボタン →「ファイルに保存」でPDFになります（または印刷画面をピンチアウト）。</p></div>
+  <article class="report">
+    <header class="rh"><div><div class="rteam">${esc(team.name||'')}</div><h1>打撃・投球 分析レポート</h1><div class="rsub">${esc(scopeLabel(list))}${score?'　'+esc(score):''}</div></div><div class="rdate">作成 ${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()}<br>記録係用・部外秘</div></header>
+    <section><h2>自チーム　打者</h2>${us.batHtml}</section>
+    <section><h2>自チーム　投手</h2>${us.pitHtml}</section>
+    ${opp?`<section class="pb"><h2>相手チーム　打者</h2>${opp.batHtml}</section><section class="nb"><h2>相手チーム　投手</h2>${opp.pitHtml}</section>`:''}
+    ${anaNote()}
+  </article>`}
+
 function renderGames(){
   const list=Object.values(games).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
   const items=list.map(gm=>{const S=replay(gm);const [t,b]=teamNames(gm);
@@ -1296,6 +1464,12 @@ document.addEventListener('click',ev=>{
     case'tab':tab=v;sheet=null;render();window.scrollTo(0,0);break;
     case'p':push(Object.assign({t:'p',k:v},pmeta()));break;
     case'ptsel':ptSel=v;render();break;
+    case'anascope':anaScope=v;render();break;
+    case'anakind':anaKind=v;render();break;
+    case'anaside':anaSide=v;render();break;
+    case'report':report=true;render();window.scrollTo(0,0);break;
+    case'closereport':report=false;render();window.scrollTo(0,0);break;
+    case'print':window.print();break;
     case'locclear':pendLoc=null;render();break;
     case'osubopen':{const S2=replay(g);sheet={type:'osub',mode:v||(S2.batter&&!S2.batter.us?'代打':'投手'),hand:v==='投手'||(!v&&!(S2.batter&&!S2.batter.us))?(S2.oppThrows||'R'):'R'};render();break}
     case'osmode':{sheet.mode=v;sheet.slot=null;sheet.pos=null;if(v==='投手'){const S2=replay(g);sheet.hand=S2.oppThrows||'R'}else sheet.hand='R';render();break}
@@ -1391,7 +1565,9 @@ document.addEventListener('click',ev=>{
     case'resend':auth.currentUser&&auth.currentUser.sendEmailVerification().then(()=>toast('確認メールを送りました')).catch(e=>toast(e.code==='auth/too-many-requests'?'しばらく待ってからもう一度お試しください':'送れませんでした'));break;
     case'checkverify':checkVerify();break;
     case'savenote':saveNote(v);break;
-    case'logout':auth.signOut();scorer=true;toast('ログアウトしました');break;
+    case'logout':{if(pendingWrites){toast('まだ送信中の記録があります。電波の良い所で少し待ってからログアウトしてください');break}
+      report=false;
+      auth.signOut().then(async()=>{try{await db.terminate();await db.clearPersistence()}catch(e){}location.reload()});toast('ログアウトしました');break}
     case'delrole':db.doc('roles/'+v).delete().then(()=>toast('入力の許可を取り消しました')).catch(writeErr);break;
     case'rq':ruleQ=v;render();break;
     case'rqclear':ruleQ='';render();break;
@@ -1795,7 +1971,7 @@ async function checkVerify(){
 }
 async function resolveRole(user){
   if(unsubRoles){unsubRoles();unsubRoles=null;roles=[]}
-  if(!user||!user.email){me=null;role='viewer';if(tab==='admin')tab='live';render();return}
+  if(!user||!user.email){me=null;role='viewer';if(tab==='admin'||tab==='ana')tab='live';render();return}
   if(!user.emailVerified){me={email:user.email.toLowerCase(),unverified:true};role='pending';render();return}
   me={email:user.email.toLowerCase()};role='pending';render();
   const ref=db.doc('roles/'+me.email);
@@ -1808,7 +1984,7 @@ async function resolveRole(user){
     role=snap.exists?(snap.data().role==='owner'?'owner':'scorer'):'pending';
   }catch(e){role='pending'}
   // 許可されるのを待つ（管理者が追加したら自動で反映）
-  unsubRoles=ref.onSnapshot(sn=>{const r=sn.exists?(sn.data().role==='owner'?'owner':'scorer'):'pending';if(r!==role){role=r;if(r==='scorer')toast('入力が許可されました');render()}},()=>{});
+  unsubRoles=ref.onSnapshot(sn=>{const r=sn.exists?(sn.data().role==='owner'?'owner':'scorer'):'pending';if(r!==role){role=r;if(r==='scorer')toast('入力が許可されました');if(!isScorer()&&tab==='ana')tab='live';render()}},()=>{});
   if(role==='owner'){const u2=db.collection('roles').onSnapshot(sn=>{roles=sn.docs.map(d=>d.data());if(tab==='admin')render()},()=>{});const u1=unsubRoles;unsubRoles=()=>{u1();u2()}}
   render();
 }
