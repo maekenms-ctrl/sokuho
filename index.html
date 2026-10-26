@@ -519,7 +519,7 @@ function replay(g){
   if(S.usP)pit('u:'+S.usP);pit('o:'+S.oppP);
   const pitKey=()=>S.half===usHalf?'o:'+S.oppP:'u:'+S.usP;
   const tot=h=>S.score[h].reduce((a,b)=>a+(b||0),0);
-  const batter=()=>{const slot=S.order[S.half]%9;return S.half===usHalf?{us:true,pid:S.lineup[slot].pid,slot}:{us:false,slot}};
+  const batter=()=>{const slot=S.order[S.half]%9;return S.half===usHalf?{us:true,pid:(S.lineup[slot]||{}).pid,slot}:{us:false,slot}};
   const oname=slot=>{const o=S.oppL[slot]||{};return `相手${slot+1}番${o.no?'（#'+o.no+'）':''}`};
   const rname=r=>r.us?pname(r.pid):oname(r.slot);
   S.ab={pre:null,items:[],pk:0};
@@ -753,7 +753,7 @@ function renderBody(g,S){
   if(noDb)return `<div class="card empty"><h3>初期設定がまだです</h3><p class="muted">firebase-config.js に Firebase の設定を書き込むと、速報が使えるようになります。</p></div>`;
   if(!booted)return `<div class="card empty"><p class="muted">試合データを読み込んでいます…</p></div>`;
   let modebar='';
-  const posBtn=tab==='live'&&g&&!S?.ended?`<span class="row" style="gap:6px;flex-wrap:nowrap"><button class="chip mini" aria-pressed="${fieldMode==='pos'}" data-act="fmode" data-v="${fieldMode==='pos'?'runner':'pos'}">守備位置</button><button class="chip mini" aria-pressed="${fieldMode==='zone'}" data-act="fmode" data-v="${fieldMode==='zone'?'runner':'zone'}">投球コース</button></span>`:'';
+  const posBtn=tab==='live'&&g&&!S?.ended&&g.lineup&&g.lineup.length?`<span class="row" style="gap:6px;flex-wrap:nowrap"><button class="chip mini" aria-pressed="${fieldMode==='pos'}" data-act="fmode" data-v="${fieldMode==='pos'?'runner':'pos'}">守備位置</button><button class="chip mini" aria-pressed="${fieldMode==='zone'}" data-act="fmode" data-v="${fieldMode==='zone'?'runner':'zone'}">投球コース</button></span>`:'';
   if(isScorer())modebar=`<div class="modebar"><span class="small muted">${scorer?'記録係モード':'閲覧モード'}　${syncLabel()}</span><div class="row" style="gap:10px;flex-wrap:nowrap">${posBtn}<label class="switch"><input type="checkbox" id="scorerSw" data-act="scorer" ${scorer?'checked':''}> 記録する</label></div></div>`;
   else if(posBtn)modebar=`<div class="modebar"><span></span>${posBtn}</div>`;
   let main;
@@ -909,6 +909,13 @@ function fieldSvg(g,S,tap){
 function lamps(n,max,c,prev){let s='';for(let i=0;i<max;i++)s+=`<span class="lamp ${c} ${i<n?'on':''} ${prev!=null&&i<n&&i>=prev?'pulse':''}"></span>`;return s}
 function renderLive(g,S){
   const started=g.events&&g.events.length;
+  if(!(g.lineup&&g.lineup.length)&&!started){const ed=editing();const ol=(g.oppLineup||[]).filter(o=>o&&o.no).length;
+    return `<div class="card pad stack prep"><div class="row" style="justify-content:space-between"><h2 style="margin:0">試合の準備中</h2><span class="ktag">スタメン未発表</span></div>
+      <p class="muted" style="margin:0">スターティングメンバーはまだ発表されていません。発表され次第、ここに表示されます。</p>
+      ${ed?`<button class="btn" data-act="editlu">スタメンを入力する</button>
+      <button class="btn ghost" data-act="opplu">相手のスタメン・先発投手を入力（任意）${ol?`<span class="small">（${ol}人入力済み）</span>`:''}</button>
+      <button class="btn ghost" data-act="ginfo" data-v="${g.id}">試合情報（大会名・グラウンド・地図）を確認・変更</button>
+      <p class="small muted" style="margin:0">スタメンを入力するまで速報の入力はできません。試合の作り直しは不要です。</p>`:''}</div>`}
   const [t,b]=teamNames(g);
   let sit='';
   if(S.ended){
@@ -1030,8 +1037,8 @@ function editLuSheet(g){
   const sorted=team.players.slice().sort((a,b)=>(+a.num||999)-(+b.num||999));
   const opt=(sel)=>`<option value="">選手を選ぶ</option>`+sorted.map(p=>`<option value="${p.id}" ${p.id===sel?'selected':''}>${esc(numFor(p,g)||'-')} ${esc(p.name)}</option>`).join('');
   const rows=[...Array(9)].map((_,i)=>{const x=g.lineup[i]||{};return `<span class="n">${i+1}</span><select id="elu${i}" data-keep="no">${opt(x.pid)}</select><select id="elp${i}" data-keep="no">${POS.map(q=>`<option ${q===x.pos?'selected':''}>${q}</option>`).join('')}</select>`}).join('');
-  return `<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true"><h3>スタメンを変更</h3>
-    <form class="form" data-form="editlu"><div class="lu">${rows}</div>
+  return `<div class="scrim" data-act="scrim"><div class="sheet" role="dialog" aria-modal="true"><h3>${g.lineup&&g.lineup.length?'スタメンを変更':'スタメンを入力'}</h3>
+    <form class="form" data-form="editlu"><label class="f">攻撃（先攻・後攻）<select id="el_top" data-keep="no"><option value="1" ${g.weTop?'selected':''}>先攻（表）</option><option value="0" ${g.weTop?'':'selected'}>後攻（裏）</option></select></label><div class="lu">${rows}</div>
     <label class="f">先発投手（指名打者を使うときだけ選ぶ）<select id="el_sp" data-keep="no">${opt(g.lineup.some(x=>x.pos==='投')?'':g.startPitcher)}</select></label>
     <button class="btn" type="submit">この内容で保存</button></form>
     <button class="btn ghost" data-act="close">閉じる</button></div></div>`;
@@ -1279,11 +1286,12 @@ function renderReport(){
 function renderGames(){
   const list=Object.values(games).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
   const items=list.map(gm=>{const S=replay(gm);const [t,b]=teamNames(gm);
-    const st=!gm.events||!gm.events.length?'試合前':S.ended?'終了':'試合中';
+    const st=!gm.events||!gm.events.length?(gm.lineup&&gm.lineup.length?'試合前':'試合前・スタメン未発表'):S.ended?'終了':'試合中';
     return `<li><button data-act="view" data-v="${gm.id}"><div style="min-width:0">${gm.tour||gm.kind?`<div class="small" style="margin-bottom:2px">${kindTag(gm)}${esc(gm.tour||'')}</div>`:''}<div style="font-weight:700">${esc(gm.usName)} vs ${esc(gm.opponent)}${gm.id===currentId?' <span class="small" style="color:var(--accent)">● 速報中</span>':''}</div><div class="small muted">${esc(gdate(gm))} ・ ${st}${gm.venue?' ・ '+esc(gm.venue):''}</div></div><span class="sc">${S.tot[0]}-${S.tot[1]}</span></button><div class="row" style="justify-content:flex-end;gap:6px"><button class="chip mini" data-act="ginfo" data-v="${gm.id}">試合情報・地図</button></div>${isScorer()&&scorer?`<div style="text-align:right"><button class="x" data-act="open" data-v="delgame" data-g="${gm.id}">この試合を削除</button></div>`:''}</li>`}).join('');
   const form=editing()?newGameForm():'';
   return form+`<div class="card pad"><h2>試合一覧</h2>${list.length?`<ul class="glist">${items}</ul>`:'<p class="muted small">まだ試合がありません。</p>'}</div>`;
 }
+let ngLater=true;
 function newGameForm(){
   if(!team.players.length)return `<div class="card pad"><h2>新しい試合</h2><p class="muted">先に「名簿」で選手を登録してください。</p><button class="btn" data-act="tab" data-v="roster">名簿を登録する</button></div>`;
   const today=new Date();const ds=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
@@ -1298,13 +1306,14 @@ function newGameForm(){
     <div class="row"><label class="f">大会名<input id="ng_tour" placeholder="例：秋季関西連盟大会 1回戦"></label><label class="f">試合の種類<select id="ng_kind">${[['official','公式戦'],['op','OP戦'],['practice','練習試合']].map(([k,l])=>`<option value="${k}">${l}</option>`).join('')}</select></label></div>
     <div class="row"><label class="f">グラウンド名<input id="ng_venue" placeholder="例：城山公園球場"></label><label class="f">住所（地図用・任意）<input id="ng_addr" placeholder="空欄ならグラウンド名で地図を探します"></label></div>
     <div class="row"><label class="f">イニング数<select id="ng_inn">${[5,6,7,9].map(n=>`<option ${n===7?'selected':''}>${n}</option>`).join('')}</select></label></div>
-    <div class="row"><label class="f">攻撃<select id="ng_top"><option value="1">先攻（表）</option><option value="0">後攻（裏）</option></select></label><label class="f">相手の先発投手<input id="ng_opit" placeholder="名前か背番号（任意）"></label></div>
+    <div class="row"><label class="f">攻撃（あとで変更可）<select id="ng_top"><option value="1">先攻（表）</option><option value="0">後攻（裏）</option></select></label><label class="f">相手の先発投手<input id="ng_opit" placeholder="名前か背番号（任意）"></label></div>
     <div class="row"><label class="f">ユニフォーム<select id="ng_uni"><option value="1">ファースト（公式）</option><option value="2">セカンド</option></select></label><label class="f">ベンチ<select id="ng_bench"><option value="1">一塁側</option><option value="3">三塁側</option><option value="">未定</option></select></label></div>
-    <div class="lbl" style="margin:4px 0 0">スターティングメンバー</div>
+    <label class="switch" style="margin-top:4px"><input type="checkbox" id="ng_later" ${ngLater?'checked':''} data-act="nglater"> スタメンはあとで入力する（試合前に発表されてから）</label>
+    <div id="ng_luwrap" ${ngLater?'hidden':''}><div class="lbl" style="margin:4px 0 0">スターティングメンバー</div>
     <div class="lu">${lu}</div>
     <div id="ng_sprow" class="row" hidden><label class="f">先発投手（指名打者を使うとき）<select id="ng_sp">${opts()}</select></label></div>
-    <p class="small muted" style="margin:0" id="ng_sphint">守備位置が「投」の選手が先発投手になります。指名打者（指）を入れたときは、打順に入らない先発投手を下で選べます。</p>
-    <button class="btn" type="submit">試合を作って速報を始める</button>
+    <p class="small muted" style="margin:0" id="ng_sphint">守備位置が「投」の選手が先発投手になります。指名打者（指）を入れたときは、打順に入らない先発投手を下で選べます。</p></div>
+    <button class="btn" type="submit">試合を作る</button>
   </form></details>`;
 }
 function renderRoster(){
@@ -1529,6 +1538,7 @@ document.addEventListener('click',ev=>{
   const a=el.dataset.act,v=el.dataset.v;
   if(['p','pa','dir','tt','run','fp','dpsave','undo'].includes(a)){try{navigator.vibrate&&navigator.vibrate(a==='pa'?18:8)}catch(e){}}
   if(a==='scrim'){if(ev.target===el){sheet=null;render()}return}
+  if(a==='nglater'){ngLater=el.checked;const w=document.getElementById('ng_luwrap');if(w)w.hidden=ngLater;return}
   if(a==='scorer'||a==='subslot')return;
   const g=cur();
   switch(a){
@@ -1709,13 +1719,14 @@ document.addEventListener('submit',ev=>{
   }
   if(f==='newgame'){
     const opp=document.getElementById('ng_opp').value.trim();if(!opp){toast('相手チームを入力してください');return}
-    const rl=readLineup('lu','lp','ng_sp');if(!rl)return;const {lineup,sp}=rl;
+    const later=document.getElementById('ng_later').checked;
+    let lineup=[],sp={pid:null};if(!later){const rl=readLineup('lu','lp','ng_sp');if(!rl)return;({lineup,sp}=rl)}
     const uniform=document.getElementById('ng_uni').value;const players={};team.players.forEach(p=>players[p.id]={num:numFor(p,{uniform}),name:p.name});
     const id=uid();
     games[id]={id,createdAt:Date.now(),updatedAt:Date.now(),usName:team.name||'自チーム',opponent:opp,date:document.getElementById('ng_date').value,time:document.getElementById('ng_time').value||'',
       venue:document.getElementById('ng_venue').value.trim(),tour:document.getElementById('ng_tour').value.trim(),kind:document.getElementById('ng_kind').value,addr:document.getElementById('ng_addr').value.trim(),innings:+document.getElementById('ng_inn').value,weTop:document.getElementById('ng_top').value==='1',
       oppPitcher:document.getElementById('ng_opit').value.trim()||'先発投手',lineup,startPitcher:sp.pid,players,uniform,bench:document.getElementById('ng_bench').value,events:[]};
-    saveGame(id);setCurrent(id);viewId=id;tab='live';render();window.scrollTo(0,0);toast('試合を作りました。速報を始めましょう');
+    saveGame(id);setCurrent(id);viewId=id;tab='live';render();window.scrollTo(0,0);toast(later?'試合を作りました。スタメンが決まったら「スタメンを入力」から登録してください':'試合を作りました。速報を始めましょう');
   }
   if(f==='rulesearch'){ruleQ=document.getElementById('rq').value.trim();render();document.getElementById('rq')?.blur()}
   if(f==='rule'){const t=document.getElementById('rl_title').value.trim(),bd=document.getElementById('rl_body').value.trim(),src=document.getElementById('rl_src').value.trim();
@@ -1727,8 +1738,8 @@ document.addEventListener('submit',ev=>{
   if(f==='login'){doLogin();return}
   if(f==='editlu'){const gm=cur();if(!gm)return;if(gm.events&&gm.events.length){toast('試合が始まっているため変更できません');return}
     const rl=readLineup('elu','elp','el_sp');if(!rl)return;
-    gm.lineup=rl.lineup;gm.startPitcher=rl.sp.pid;[...rl.lineup.map(x=>x.pid),rl.sp.pid].forEach(pid=>addPlayer(gm,pid));
-    gm.updatedAt=Date.now();saveGame(gm.id);sheet=null;toast('スタメンを変更しました');render();return}
+    const had=gm.lineup&&gm.lineup.length;const tp=document.getElementById('el_top');if(tp)gm.weTop=tp.value==='1';gm.lineup=rl.lineup;gm.startPitcher=rl.sp.pid;[...rl.lineup.map(x=>x.pid),rl.sp.pid].forEach(pid=>addPlayer(gm,pid));
+    gm.updatedAt=Date.now();saveGame(gm.id);sheet=null;toast(had?'スタメンを変更しました':'スタメンを登録しました。速報を始められます');render();return}
   if(f==='opplu'){const gm=cur();if(!gm)return;const v=id=>(document.getElementById(id)||{}).value||'';
     const L=[...Array(9)].map((_,i)=>({no:v('ol_no'+i).trim().replace(/^#/,''),pos:v('ol_pos'+i),bats:v('ol_bt'+i)}));
     if(L.some(o=>o.no&&!/^\d{1,3}$/.test(o.no))){toast('背番号は数字で入力してください');return}
