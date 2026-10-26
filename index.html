@@ -502,8 +502,8 @@ function uid(){return (crypto.randomUUID?crypto.randomUUID():Date.now().toString
 let toastT,undoFn=null;function toast(m){const t=document.getElementById('toast');t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2200)}
 function toastUndo(m,fn){undoFn=fn;const t=document.getElementById('toast');t.innerHTML=`${esc(m)}<button data-act="toastundo">元に戻す</button>`;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>{t.hidden=true;undoFn=null},6000)}
 function toTop(){const c=document.getElementById('livecard');if(!c)return;const h=document.querySelector('.top')?.offsetHeight||0;const y=c.getBoundingClientRect().top+window.scrollY-h-8;window.scrollTo({top:y,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'})}
-function fixEdit(fn,msg){const gm=cur();const ev=gm.events[sheet.ei];if(!ev)return;const before=JSON.stringify(ev);fn(ev);gm.updatedAt=Date.now();saveGame(gm.id);const ei=sheet.ei;sheet=null;render();
-  const gid=gm.id;toastUndo(msg,()=>{const g2=games[gid];if(!g2)return;g2.events[ei]=JSON.parse(before);g2.updatedAt=Date.now();saveGame(gid);render()})}
+function fixEdit(fn,msg){const gm=cur();const ev=gm.events[sheet.ei];if(!ev)return;const before=JSON.stringify(ev);fn(ev);evWrite(gm,sheet.ei);const ei=sheet.ei;sheet=null;render();
+  const gid=gm.id;toastUndo(msg,()=>{const g2=games[gid];if(!g2)return;evReplace(g2,ei,JSON.parse(before));render()})}
 
 /* ---------- game engine: state is rebuilt by replaying events ---------- */
 function replay(g){
@@ -545,7 +545,7 @@ function replay(g){
     S.score[S.half][S.inning-1]=(S.score[S.half][S.inning-1]||0)+1;
     if(r.us)bat(r.pid).R++;
     const P=pit(pitKey());P.R++;
-    const n=S.runIdx[S.ei]=(S.runIdx[S.ei]||0)+1;const key=S.ei+'-'+n;
+    const n=S.runIdx[S.ei]=(S.runIdx[S.ei]||0)+1;const key=evKey(g,S.ei)+'-'+n;
     const auto=!(r.ue||S.vOuts>=3);const ov=erOv[key];const earned=ov?ov==='E':auto;
     if(earned)P.ER++;S.pendRuns.push({key,earned,auto,who:rname(r)});
     if(rbiPid)bat(rbiPid).RBI++;
@@ -704,11 +704,40 @@ function writeErr(e){
   if(e&&e.code==='permission-denied')toast('記録する権限がありません。管理者に許可を依頼してください');
   else toast('保存できませんでした。通信状況を確認してください');
 }
-function saveGame(id){db.doc('games/'+id).set(JSON.parse(JSON.stringify(games[id]))).catch(writeErr)}
+/* ---------- 記録の保存（複数人で同時に入力しても消えない） ----------
+   新しい記録は games/{id} の ev.{記録ID} に1件ずつ追加する（丸ごと上書きしない）。
+   以前の試合の events（配列）はそのまま読み、その後ろに ev を時刻順に並べる。 */
+const DEV=(()=>{let d=lsGet('devId','');if(!d){d=uid().slice(0,8);lsSet('devId',d)}return d})();
+const META_SKIP=['id','events','ev','cmts','notes','_legacy','_ref'];
+function hydrate(g){g._legacy=Array.isArray(g.events)?g.events:(g._legacy||[]);g.ev=g.ev||{};rebuildEv(g);return g}
+function rebuildEv(g){const m=Object.entries(g.ev).filter(([,e])=>e).sort((a,b)=>(a[1].o||0)-(b[1].o||0)||a[0].localeCompare(b[0]));
+  g.events=g._legacy.concat(m.map(x=>x[1]));g._ref=g._legacy.map((_,i)=>({a:i})).concat(m.map(x=>({k:x[0]})))}
+function gdoc(g){return db.doc('games/'+g.id)}
+const FP=(...a)=>new firebase.firestore.FieldPath(...a);
+function touch(g){g.updatedAt=Date.now();gdoc(g).update('updatedAt',g.updatedAt).catch(()=>{})}
+function writeLegacy(g){gdoc(g).update('events',JSON.parse(JSON.stringify(g._legacy))).catch(writeErr)}
+function evAppend(g,ev){if(!g.ev)hydrate(g);const last=Object.values(g.ev).reduce((m,e)=>Math.max(m,e&&e.o||0),0);
+  const k=Date.now().toString(36)+uid().slice(0,6);const e=JSON.parse(JSON.stringify({...ev,o:Math.max(Date.now(),last+1),by:DEV}));
+  g.ev[k]=e;rebuildEv(g);gdoc(g).update(FP('ev',k),e).catch(writeErr);touch(g);return k}
+function evWrite(g,i){const r=g._ref[i];if(!r)return;if(r.a!=null){writeLegacy(g)}else{gdoc(g).update(FP('ev',r.k),JSON.parse(JSON.stringify(g.ev[r.k]))).catch(writeErr)}touch(g)}
+function evReplace(g,i,obj){const r=g._ref[i];if(!r)return;if(r.a!=null)g._legacy[r.a]=obj;else g.ev[r.k]=obj;rebuildEv(g);evWrite(g,g._ref.findIndex(x=>r.a!=null?x.a===r.a:x.k===r.k))}
+function evRemove(g,i){const r=g._ref[i];if(!r)return null;let tok;
+  if(r.a!=null){const old=g._legacy.splice(r.a,1)[0];tok={a:r.a,e:old};rebuildEv(g);writeLegacy(g)}
+  else{const old=g.ev[r.k];delete g.ev[r.k];tok={k:r.k,e:old};rebuildEv(g);gdoc(g).update(FP('ev',r.k),firebase.firestore.FieldValue.delete()).catch(writeErr)}
+  touch(g);return tok}
+function evRemoveKey(g,k){const i=g._ref.findIndex(x=>x.k===k);return i<0?null:evRemove(g,i)}
+function evRestore(g,tok){if(!tok)return;if(tok.a!=null){g._legacy.splice(tok.a,0,tok.e);rebuildEv(g);writeLegacy(g)}else{g.ev[tok.k]=tok.e;rebuildEv(g);gdoc(g).update(FP('ev',tok.k),tok.e).catch(writeErr)}touch(g)}
+function evKey(g,i){const r=(g._ref||[])[i];return !r?String(i):r.a!=null?String(r.a):r.k}
+function saveGame(id){const g=games[id];if(!g)return;const m={};for(const k in g)if(!META_SKIP.includes(k))m[k]=g[k];db.doc('games/'+id).set(JSON.parse(JSON.stringify(m)),{merge:true}).catch(writeErr)}
+function createGame(id){const g=games[id];const m={};for(const k in g)if(!['id','_legacy','_ref'].includes(k))m[k]=g[k];m.events=[];m.ev={};db.doc('games/'+id).set(JSON.parse(JSON.stringify(m))).catch(writeErr);hydrate(g)}
 function saveTeam(){db.doc('team/main').set(JSON.parse(JSON.stringify(team))).catch(writeErr)}
 function setCurrent(id){currentId=id;db.doc('meta/current').set({gameId:id}).catch(()=>{})}
-function push(ev){const g=cur();if(!g)return;g.events=g.events||[];g.events.push(ev);g.updatedAt=Date.now();saveGame(g.id);render()}
-function undo(){const g=cur();if(!g||!g.events||!g.events.length){toast('取り消す記録がありません');return}g.events.pop();g.updatedAt=Date.now();saveGame(g.id);toast('ひとつ前の記録を取り消しました');render()}
+function push(ev){const g=cur();if(!g)return;const k=evAppend(g,ev);render();return k}
+function undo(){const g=cur();if(!g||!g.events||!g.events.length){toast('取り消す記録がありません');return}
+  let i=-1;for(let j=g._ref.length-1;j>=0;j--){const r=g._ref[j];if(r.k!=null&&g.ev[r.k].by===DEV){i=j;break}}
+  const mine=i>=0;if(!mine)i=g.events.length-1;
+  const others=mine?g.events.length-1-i:0;
+  evRemove(g,i);toast(mine?(others?'あなたが入力したひとつ前の記録を取り消しました（ほかの人の記録はそのまま）':'ひとつ前の記録を取り消しました'):'ひとつ前の記録を取り消しました');render()}
 
 /* ---------- render ---------- */
 const isScorer=()=>role==='scorer'||role==='owner';
@@ -1546,7 +1575,7 @@ document.addEventListener('click',ev=>{
     case'p':push(Object.assign({t:'p',k:v},pmeta()));break;
     case'ptsel':ptSel=v;render();break;
     case'anascope':anaScope=v;render();break;
-    case'ertog':{if(!g)break;g.erOv=g.erOv||{};const next=el.dataset.cur==='1'?'U':'E';if((next==='E')===(el.dataset.auto==='1'))delete g.erOv[v];else g.erOv[v]=next;g.updatedAt=Date.now();saveGame(g.id);render();toast(next==='E'?'自責点にしました':'非自責点にしました');break}
+    case'ertog':{if(!g)break;g.erOv=g.erOv||{};const next=el.dataset.cur==='1'?'U':'E';const back=(next==='E')===(el.dataset.auto==='1');if(back)delete g.erOv[v];else g.erOv[v]=next;gdoc(g).update(FP('erOv',v),back?firebase.firestore.FieldValue.delete():next).catch(writeErr);touch(g);render();toast(next==='E'?'自責点にしました':'非自責点にしました');break}
     case'seasonv':seasonView=v;render();break;
     case'anakind':anaKind=v;render();break;
     case'anaside':anaSide=v;render();break;
@@ -1621,9 +1650,9 @@ document.addEventListener('click',ev=>{
     case'fix':sheet={type:'fix',ei:+v};render();break;
     case'fixk':fixEdit(ev=>{ev.k=v},'判定を訂正しました');break;
     case'fixc':fixEdit(ev=>{ev.c=v;if(v!=='DP'){delete ev.o;delete ev.f}},'打席結果を訂正しました');break;
-    case'fixd':{const gm=cur();const ev=gm.events[sheet.ei];ev.d=v||null;gm.updatedAt=Date.now();saveGame(gm.id);render();break}
-    case'fixdel':{const gm=cur();const ei=sheet.ei;const old=gm.events[ei];gm.events.splice(ei,1);gm.updatedAt=Date.now();saveGame(gm.id);sheet=null;render();
-      const gid=gm.id;toastUndo('削除しました',()=>{const g2=games[gid];if(!g2)return;g2.events.splice(ei,0,old);g2.updatedAt=Date.now();saveGame(gid);render()});break}
+    case'fixd':{const gm=cur();const ev=gm.events[sheet.ei];ev.d=v||null;evWrite(gm,sheet.ei);render();break}
+    case'fixdel':{const gm=cur();const ei=sheet.ei;const tok=evRemove(gm,ei);sheet=null;render();
+      const gid=gm.id;toastUndo('削除しました',()=>{const g2=games[gid];if(!g2)return;evRestore(g2,tok);render()});break}
     case'toastundo':if(undoFn){const f=undoFn;undoFn=null;f();toast('元に戻しました')}break;
     case'gamedel':sheet={type:'delgame',gid:v};render();break;
     case'runwhy':sheet.why=v;render();break;
@@ -1636,14 +1665,14 @@ document.addEventListener('click',ev=>{
       const S=replay(g);const pos=kind==='守備'?(document.getElementById('sb_pos')?.value||el.dataset.pos||S.lineup[slot].pos):S.lineup[slot].pos;
       addPlayer(g,v);push({t:'sub',slot,pid:v,pos,kind});sheet=null;render();toast(`${kind}を記録しました`);break}
     case'dopos':push({t:'pos',slot:+el.dataset.slot,pos:v});if(sheet&&sheet.type==='plsel'){sheet=null;render();toast('守備位置を変更しました')}break;
-    case'dopitch':{addPlayer(g,v);push({t:'pitcher',side:'us',pid:v});sheet=null;render();const gid=g.id;toastUndo('投手交代を記録しました',()=>{const g2=games[gid];if(g2&&g2.events.length&&g2.events.at(-1).t==='pitcher'){g2.events.pop();g2.updatedAt=Date.now();saveGame(gid);render()}});break}
+    case'dopitch':{addPlayer(g,v);const pkK=push({t:'pitcher',side:'us',pid:v});sheet=null;render();const gid=g.id;toastUndo('投手交代を記録しました',()=>{const g2=games[gid];if(g2){evRemoveKey(g2,pkK);render()}});break}
     case'pstep':sheet={type:'pitcher2',pid:v};render();break;
     case'pmode':sheet.mode=v||null;render();break;
-    case'dopitchsw':{addPlayer(g,v);push({t:'pitcher',side:'us',pid:v});sheet=null;render();const gid=g.id;
-      toastUndo('投手と野手を入れ替えました',()=>{const g2=games[gid];if(g2&&g2.events.length&&g2.events.at(-1).t==='pitcher'){g2.events.pop();g2.updatedAt=Date.now();saveGame(gid);render()}});break}
-    case'dopitch2':case'dopitch2rep':{const ev={t:'pitcher',side:'us',pid:sheet.pid};if(a==='dopitch2rep'){addPlayer(g,v);ev.rep=v}addPlayer(g,sheet.pid);push(ev);sheet=null;render();const gid=g.id;
-      toastUndo('投手交代を記録しました',()=>{const g2=games[gid];if(g2&&g2.events.length&&g2.events.at(-1).t==='pitcher'){g2.events.pop();g2.updatedAt=Date.now();saveGame(gid);render()}});break}
-    case'opqp':{push({t:'pitcher',side:'opp',name:v});sheet=null;render();const gid=g.id;toastUndo(`相手の投手を${v}に交代しました`,()=>{const g2=games[gid];if(g2&&g2.events.length&&g2.events.at(-1).t==='pitcher'){g2.events.pop();g2.updatedAt=Date.now();saveGame(gid);render()}});break}
+    case'dopitchsw':{addPlayer(g,v);const pkK=push({t:'pitcher',side:'us',pid:v});sheet=null;render();const gid=g.id;
+      toastUndo('投手と野手を入れ替えました',()=>{const g2=games[gid];if(g2){evRemoveKey(g2,pkK);render()}});break}
+    case'dopitch2':case'dopitch2rep':{const ev={t:'pitcher',side:'us',pid:sheet.pid};if(a==='dopitch2rep'){addPlayer(g,v);ev.rep=v}addPlayer(g,sheet.pid);const pkK=push(ev);sheet=null;render();const gid=g.id;
+      toastUndo('投手交代を記録しました',()=>{const g2=games[gid];if(g2){evRemoveKey(g2,pkK);render()}});break}
+    case'opqp':{const pkK=push({t:'pitcher',side:'opp',name:v});sheet=null;render();const gid=g.id;toastUndo(`相手の投手を${v}に交代しました`,()=>{const g2=games[gid];if(g2){evRemoveKey(g2,pkK);render()}});break}
     case'doend':push({t:'end'});sheet=null;render();break;
     case'view':viewId=v;tab='live';render();window.scrollTo(0,0);break;
     case'dodelgame':{const id=sheet&&sheet.gid;sheet=null;if(!id)break;delete games[id];if(viewId===id)viewId=null;
@@ -1696,7 +1725,7 @@ function readLineup(lu,lp,spId){
     if(seen.has(spid)){toast('先発投手は打順に入っていない選手を選んでください');return null}sp={pid:spid}}
   return {lineup,sp};
 }
-function addPlayer(g,pid){if(!g.players[pid]){const p=team.players.find(x=>x.id===pid);if(p)g.players[pid]={num:numFor(p,g),name:p.name}}}
+function addPlayer(g,pid){if(!g.players[pid]){const p=team.players.find(x=>x.id===pid);if(p){g.players[pid]={num:numFor(p,g),name:p.name};if(g.ev)gdoc(g).update(FP('players',pid),g.players[pid]).catch(()=>{})}}}
 function syncGameNums(pl){Object.values(games).forEach(gm=>{if(gm.players&&gm.players[pl.id]&&!replay(gm).ended){gm.players[pl.id]={num:numFor(pl,gm),name:pl.name};saveGame(gm.id)}})}
 document.addEventListener('submit',ev=>{
   ev.preventDefault();const f=ev.target.dataset.form;
@@ -1726,7 +1755,7 @@ document.addEventListener('submit',ev=>{
     games[id]={id,createdAt:Date.now(),updatedAt:Date.now(),usName:team.name||'自チーム',opponent:opp,date:document.getElementById('ng_date').value,time:document.getElementById('ng_time').value||'',
       venue:document.getElementById('ng_venue').value.trim(),tour:document.getElementById('ng_tour').value.trim(),kind:document.getElementById('ng_kind').value,addr:document.getElementById('ng_addr').value.trim(),innings:+document.getElementById('ng_inn').value,weTop:document.getElementById('ng_top').value==='1',
       oppPitcher:document.getElementById('ng_opit').value.trim()||'先発投手',lineup,startPitcher:sp.pid,players,uniform,bench:document.getElementById('ng_bench').value,events:[]};
-    saveGame(id);setCurrent(id);viewId=id;tab='live';render();window.scrollTo(0,0);toast(later?'試合を作りました。スタメンが決まったら「スタメンを入力」から登録してください':'試合を作りました。速報を始めましょう');
+    createGame(id);setCurrent(id);viewId=id;tab='live';render();window.scrollTo(0,0);toast(later?'試合を作りました。スタメンが決まったら「スタメンを入力」から登録してください':'試合を作りました。速報を始めましょう');
   }
   if(f==='rulesearch'){ruleQ=document.getElementById('rq').value.trim();render();document.getElementById('rq')?.blur()}
   if(f==='rule'){const t=document.getElementById('rl_title').value.trim(),bd=document.getElementById('rl_body').value.trim(),src=document.getElementById('rl_src').value.trim();
@@ -2099,7 +2128,7 @@ function dhToggle(){const row=document.getElementById('ng_sprow');if(!row)return
   db.doc('meta/current').onSnapshot(s=>{const prev=currentId;currentId=s.exists?s.data().gameId:null;if(booted&&(!viewId||viewId===prev)&&currentId&&games[currentId])viewId=currentId;render()},()=>{});
   db.collection('games').onSnapshot({includeMetadataChanges:true},snap=>{
     pendingWrites=snap.metadata.hasPendingWrites;offline=snap.metadata.fromCache&&!navigator.onLine;
-    snap.docs.forEach(d=>{games[d.id]=JSON.parse(JSON.stringify(d.data()));games[d.id].id=d.id});
+    snap.docs.forEach(d=>{games[d.id]=JSON.parse(JSON.stringify(d.data()));games[d.id].id=d.id;hydrate(games[d.id])});
     snap.docChanges().forEach(c=>{if(c.type==='removed')delete games[c.doc.id]});
     if(!viewId&&currentId&&games[currentId])viewId=currentId;
     loaded.games=true;
