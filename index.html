@@ -131,7 +131,7 @@ h2{font-size:13px;letter-spacing:.06em;color:var(--muted);margin:0 0 8px;font-we
 .plays .tag{font-size:11px;color:var(--muted);font-family:var(--f-num);min-width:34px}
 .plays .txt{grid-column:2}
 .plays .run{color:var(--danger);font-weight:700}
-.seq{display:flex;flex-wrap:wrap;gap:3px;grid-column:2}
+.seq{display:flex;flex-wrap:wrap;align-items:center;gap:3px;grid-column:2}
 .pc{width:18px;height:18px;border-radius:50%;font-size:10px;display:grid;place-items:center;font-weight:700;color:#0b1a12}
 .pc.B{background:var(--lamp-b)}.pc.S,.pc.W,.pc.F{background:var(--lamp-s)}.pc.X{background:var(--inplay);color:#fff}
 .half{font-size:14px;font-weight:700;padding:10px 14px;background:var(--soft);border-radius:8px 8px 0 0}
@@ -394,8 +394,7 @@ table.ls td.jmp:active{filter:brightness(1.4)}
 .pkic{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--lamp-o);color:#fff;font-size:10px;margin-right:6px}
 .pktot{font-weight:700!important;color:var(--muted)!important}
 .pkbadge{margin-left:8px;font-size:11px;font-weight:700;color:#fff;background:var(--lamp-o);border-radius:99px;padding:1px 7px}
-.pc.brk{border-radius:0;clip-path:polygon(50% 0,100% 100%,0 100%);width:22px;height:20px;place-items:end center;padding-bottom:1px;font-size:9px;line-height:1}
-button.pc.brk{padding:0 0 1px}
+.pc.brk{box-sizing:border-box;border-radius:0;width:22px;height:20px;display:flex;align-items:flex-start;justify-content:center;padding:8.5px 0 0;font-size:9.5px;line-height:1;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 20'%3E%3Cpath d='M11 .8c.9 0 1.5.5 2 1.3l8.3 14.6c.9 1.6-.1 2.8-1.8 2.8H2.5C.8 19.5-.2 18.3.7 16.7L9 2.1c.5-.8 1.1-1.3 2-1.3z'/%3E%3C/svg%3E") center/100% 100% no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 20'%3E%3Cpath d='M11 .8c.9 0 1.5.5 2 1.3l8.3 14.6c.9 1.6-.1 2.8-1.8 2.8H2.5C.8 19.5-.2 18.3.7 16.7L9 2.1c.5-.8 1.1-1.3 2-1.3z'/%3E%3C/svg%3E") center/100% 100% no-repeat}
 .zball{fill:#e8f3ea;stroke:#9bc4a3}
 .zzone{fill:#fff7dd;stroke:#13284B;stroke-width:2}
 .zg{stroke:#13284B;stroke-width:.8;opacity:.5}
@@ -1003,7 +1002,7 @@ function renderLive(g,S){
     const cnt=ptRow+`<div class="cnt"><button class="big B" data-act="p" data-v="B">ボール</button><button class="big S" data-act="p" data-v="S">見逃し</button><button class="big W" data-act="p" data-v="W">空振り</button><button class="big F" data-act="p" data-v="F">ファウル</button></div>`;
     const field=`<div class="fieldwrap ${ed?'ed':''}">${fieldMode==='pos'?`<div class="small muted" style="text-align:center;margin-bottom:2px">${esc(g.usName)}の守備位置</div>`:''}${fieldSvg(g,S,ed&&fieldMode==='runner')}</div>`;
     const seqRow=`<div class="row" style="justify-content:space-between;flex-wrap:nowrap;min-height:28px">${seq||'<span class="small muted">この打席の投球はまだありません</span>'}<button class="undo1" data-act="undo">↶ 1つ戻す</button></div>`;
-    sit=ed?`<div class="card pad stack" id="livecard">${head}${cnt}${seqRow}${mu}${field}</div>`:`<div class="card pad stack">${head}${seq}${mu}${field}</div>`;
+    sit=ed?`<div class="card pad stack" id="livecard">${cnt}${seqRow}${mu}${field}${head}</div>`:`<div class="card pad stack">${head}${seq}${mu}${field}</div>`;
   }
   const preCard=!started?preGameCard(g,S):'';
   const panel=editing()&&!S.ended?inputPanel(g,S):(editing()&&S.ended?`<div class="card pad row"><span class="muted small" style="flex:1">試合終了の記録を取り消すと再開できます。</span><button class="btn ghost" data-act="undo">取り消し</button></div>`:'');
