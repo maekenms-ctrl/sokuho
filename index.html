@@ -495,6 +495,8 @@ body.rep{background:#fff}
 .advr .chip{padding:6px 9px;font-size:12.5px}
 .advr .chip.home{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:800}
 .advr .chip.out{color:var(--danger,#B3261E)}
+.rb-ban.evt rect{fill:#1E3A66}
+.advr .chip.err{color:#B85A12;border-color:#F0B27A}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -567,7 +569,12 @@ function replay(g){
   const sit=()=>({outs:S.outs,bases:S.bases.map(x=>!!x)});
   const abStart=()=>{if(!S.ab.pre)S.ab.pre=sit()};
   S.vOuts=0;S.pendRuns=[];S.runIdx={};const erOv=g.erOv||{};
-  const log=(o)=>{if(S.pendRuns.length)o={...o,er:S.pendRuns.splice(0)};S.log.push({inning:S.inning,half:S.half,ei:S.ei,...o});if(o.kind!=='pa'){abStart();S.ab.items.push({ev:o.text,kind:o.kind,runs:o.runs||0,score:o.score,ei:S.ei,er:o.er})}};
+  const log=(o)=>{if(S.pendRuns.length)o={...o,er:S.pendRuns.splice(0)};S.log.push({inning:S.inning,half:S.half,ei:S.ei,...o});if(o.kind==='pa')return;
+    const it={ev:o.text,kind:o.kind,runs:o.runs||0,score:o.score,ei:S.ei,er:o.er};
+    /* 打球の直後（次の球の前）の走者の動きは、その打者の打席にまとめる */
+    const pe=S.lastPA&&S.lastPA.e;
+    if(o.kind==='run'&&['adv','E','TO','RD'].includes(o.why)&&S.since===0&&pe&&pe.inning===S.inning&&pe.half===S.half&&!S.ab.items.some(x=>x.p)&&pe.ab){pe.ab.items.push(it);pe.runsAll=(pe.runsAll!=null?pe.runsAll:(pe.runs||0))+(o.runs||0);pe.scoreAll=o.score;return}
+    abStart();S.ab.items.push(it)};
   const flushTail=()=>{if(S.ab.items.length){S.log.push({kind:'tail',inning:S.inning,half:S.half,ei:S.ei,ab:{pre:S.ab.pre,items:S.ab.items,pk:S.ab.pk}})}S.ab={pre:null,items:[],pk:0}};
   function endHalf(){
     if(S.ended)return;
@@ -680,11 +687,11 @@ function replay(g){
     else if(e.t==='oset'){if(e.slot!=null&&S.oppL[e.slot]){S.oppL[e.slot].bats=e.bats;S.oppL[e.slot].side=e.side||''}if(e.throws)S.oppThrows=e.throws}
     else if(e.t==='run'){
       const r=S.bases[e.base];if(!r)continue;
-      const rbi=(e.why==='adv'&&S.since===0&&S.lastEligible&&S.lastBatter&&!(S.lastPA&&S.lastPA.ov))?S.lastBatter:null;
+      const rbi=(e.why==='adv'&&S.since===0&&S.lastEligible&&S.lastBatter&&!(S.lastPA&&S.lastPA.ov)&&!(r.us&&r.pid===S.lastBatter))?S.lastBatter:null;
       const before=[tot(0),tot(1)];
       let text='';
       const fx=e.f?`（${e.f}）`:'';const btw=['一二塁間','二三塁間','三本間'][e.base];
-      if(e.to==='out'){if(e.why==='CS'&&r.us)bat(r.pid).CS++;S.bases[e.base]=null;text=e.why==='RD'?`${btw}の挟殺プレー${fx}で${BASEN[e.base]}走者 ${rname(r)} タッチアウト`:`${BASEN[e.base]}走者 ${rname(r)} ${e.why==='PO'?'牽制死':e.why==='CS'?'盗塁死':'走塁死'}${fx}`;log({kind:'run',text,runs:0,score:before});addOut(1);continue}
+      if(e.to==='out'){if(e.why==='CS'&&r.us)bat(r.pid).CS++;S.bases[e.base]=null;text=e.why==='RD'?`${btw}の挟殺プレー${fx}で${BASEN[e.base]}走者 ${rname(r)} タッチアウト`:`${BASEN[e.base]}走者 ${rname(r)} ${e.why==='PO'?'牽制死':e.why==='CS'?'盗塁死':'走塁死'}${fx}`;log({kind:'run',text,runs:0,score:before,why:e.why});addOut(1);continue}
       if(e.why==='SB'&&r.us)bat(r.pid).SB++;
       if(e.why==='E'||e.why==='PB')r.ue=true;
       const tgt=e.to==='home'?3:e.to==='next'?e.base+1:+e.to;
@@ -696,7 +703,7 @@ function replay(g){
       const scored=tot(0)+tot(1)-before[0]-before[1];if(rbi&&scored&&S.lastPA&&S.lastPA.e){S.lastPA.e.rbi=(S.lastPA.e.rbi||0)+scored;S.lastPA.e.autoRbi=(S.lastPA.e.autoRbi||0)+scored}
       const where=tgt>=3?'生還':tgt<e.base?`${BASEN[tgt]}へ戻る`:`${BASEN[tgt]}へ`;
       text=e.why==='RD'?`${btw}の挟殺プレー${fx}、${BASEN[e.base]}走者 ${rname(r)} ${where==='生還'?'生還':where}（セーフ）`:`${BASEN[e.base]}走者 ${rname(r)} ${e.why==='adv'||tgt<e.base?'':why+'で'}${where}`;
-      log({kind:'run',text,runs:scored,score:[tot(0),tot(1)]});
+      log({kind:'run',text,runs:scored,score:[tot(0),tot(1)],why:e.why});
     }
     else if(e.t==='sub'){
       const old=S.lineup[e.slot].pid;const runBase=S.bases.findIndex(r=>r&&r.us&&r.pid===old);
@@ -910,9 +917,9 @@ function resultBanner(e){
   if(['GO','FO','LO'].includes(e.code)&&e.dir&&FIELD[e.dir])big=e.text.replace(/（.*$/,'');
   if(e.code==='K')big=/空振り/.test(e.text)?'空振り三振':/見逃し/.test(e.text)?'見逃し三振':'三振';
   if(e.code==='DP'&&/三重殺/.test(e.text))big='トリプルプレー';
-  const runs=e.runs?`　${e.runs}点！`:'';
+  const rA=e.runsAll!=null?e.runsAll:e.runs;const runs=rA?`　${rA}点！`:'';
   const who=surname(String(e.who).replace(/^相手(\d+)番$/,'相手$1番'));
-  let sub=`${who}　${e.text}`;if(sub.length>22)sub=sub.slice(0,21)+'…';
+  let sub=`${who}　${e.text}`;if(sub.length>18)sub=sub.slice(0,17)+'…';if(e.us&&e.rbi)sub+=`（打点${e.rbi}）`;
   const cls=hit?'hit':walk?'walk':'out';const w=Math.min(290,Math.max(120,(big.length+runs.length)*19+30));
   const bk=e.ei+':'+e.code;const pop=bk!==lastBan&&lastBan!=='';const first=lastBan==='';lastBan=bk;fxBan=pop;
   const kind=e.code==='HR'?'hr':e.code==='K'?'k':hit?'hitfx':'';
@@ -925,6 +932,23 @@ function resultBanner(e){
   return `${fx}<g class="rb-ban ${cls} ${kind} ${pop?'pop':''}"><rect x="${150-w/2}" y="-34" width="${w}" height="34" rx="17"/><text class="rb-big" x="150" y="-10" text-anchor="middle">${esc(big)}<tspan class="rb-runs">${esc(runs)}</tspan></text>
     <text class="rb-sub" x="150" y="16" text-anchor="middle">${esc(sub)}</text></g>`;
 }
+function eventBanner(ev,le){
+  const W={SB:'盗塁成功！',CS:'盗塁死',PO:'走塁死',WP:'暴投',PB:'捕逸',E:'エラー',RD:'挟殺プレー',adv:'進塁'};
+  let big='';
+  if(ev.t==='run')big=ev.to==='out'?(ev.why==='CS'?'盗塁死':ev.why==='RD'?'挟殺でアウト':'走塁死'):((le&&le.runs)?(ev.why==='E'?'エラーで生還':ev.why==='WP'?'暴投で生還':ev.why==='PB'?'捕逸で生還':ev.why==='SB'?'ホームスチール！':'生還！'):(W[ev.why]||'進塁'));
+  else if(ev.t==='time')big=ev.kind==='def'?'守備のタイム':ev.kind==='off'?'攻撃のタイム':'タイム';
+  else if(ev.t==='pk')big='牽制';
+  else if(ev.t==='sub'||ev.t==='osub')big=ev.kind==='代打'?'代打':ev.kind==='代走'?'代走':'選手交代';
+  else if(ev.t==='pitcher')big='投手交代';
+  else if(ev.t==='pos'||ev.t==='opos'||ev.t==='rearr')big='守備の変更';
+  else if(ev.t==='end')big='試合終了';
+  else return '';
+  const runs=le&&le.runs?`　${le.runs}点！`:'';let sub=le?le.text:'';if(sub.length>24)sub=sub.slice(0,23)+'…';
+  const w=Math.min(290,Math.max(110,(big.length+runs.length)*19+30));
+  const bk='ev'+(le?le.ei:'')+':'+ev.t;const pop=bk!==lastBan&&lastBan!=='';lastBan=bk;fxBan=false;
+  const cls=ev.to==='out'?'out':(le&&le.runs)?'hit':'evt';
+  return `<g class="rb-ban ${cls} ${pop?'pop':''}"><rect x="${150-w/2}" y="-34" width="${w}" height="34" rx="17"/><text class="rb-big" x="150" y="-10" text-anchor="middle">${esc(big)}<tspan class="rb-runs">${esc(runs)}</tspan></text>
+    <text class="rb-sub" x="150" y="16" text-anchor="middle">${esc(sub)}</text></g>`}
 function surname(n){return String(n||'').trim().split(/[\s　]+/)[0]}
 const POSXY={投:[150,192],捕:[150,244],一:[210,172],二:[196,134],遊:[104,134],三:[90,172],左:[70,84],中:[150,60],右:[230,84]};
 function batsOf(S,B){if(!B)return'';return B.us?(S.usBats[B.pid]||(team.players.find(p=>p.id===B.pid)||{}).bats||''):((S.oppL[B.slot]||{}).bats||'')}
@@ -985,8 +1009,18 @@ function fieldSvg(g,S,tap){
     ground+=[0,1,2].map(i=>`<rect class="f-base" x="${B[i][0]-4}" y="${B[i][1]-4}" width="8" height="8" transform="rotate(45 ${B[i][0]} ${B[i][1]})"/>`).join('');
   }else{
     // last batted ball
-    const last=[...S.log].reverse().find(l=>l.kind==='pa');
-    if(last)over+=resultBanner(last);
+    let last=[...S.log].reverse().find(l=>l.kind==='pa');
+    /* いちばん新しい出来事で表示を決める（次の投球で打球の表示はリセット） */
+    const EVs=g.events||[];let li=EVs.length-1;while(li>=0&&['uset','oset','bat'].includes(EVs[li].t))li--;
+    const lev=li>=0?EVs[li]:null;let showPA=false,evb='';
+    if(lev&&last){
+      if(last.ei===li)showPA=true;
+      else if(lev.t==='p'){showPA=false}
+      else if(lev.t==='run'&&S.since===0&&last.inning===S.inning&&last.half===S.half&&!(S.cur&&S.cur.items.some(x=>x.p))&&last.ab&&last.ab.items.some(x=>x.ei===li))showPA=true;
+      else{const le=[...S.log].reverse().find(l=>l.ei===li);evb=eventBanner(lev,le)}
+    }
+    if(!showPA)last=null;
+    if(last)over+=resultBanner(last);else if(evb)over+=evb;
     if(last&&last.dir){const bp=ballPath(last.code,last.dir,last.tt);
       if(bp){const key=last.ei+':'+last.code+':'+last.dir+':'+(last.tt||'');const anim=key!==lastAnim;lastAnim=key;
         const mv=anim&&!RM()&&lastBan!==''&&fxBan;const dur=bp.type==='F'?1.1:bp.type==='L'?0.6:0.8;
@@ -994,7 +1028,7 @@ function fieldSvg(g,S,tap){
         if(mv){over+=`<circle r="${bp.type==='F'?5:4}" class="f-mv"><animateMotion dur="${dur}s" fill="freeze" path="${bp.d}" calcMode="spline" keyTimes="0;1" keySplines=".3 .1 .4 1"/>${bp.type==='F'?`<animate attributeName="r" values="4;8;5" dur="${dur}s" fill="freeze"/>`:''}<animate attributeName="opacity" values="1;1;0" keyTimes="0;.9;1" dur="${dur}s" fill="freeze"/></circle>
           <circle class="f-ripple" cx="${bp.x.toFixed(1)}" cy="${bp.y.toFixed(1)}" r="5" opacity="0"><animate attributeName="r" from="5" to="22" begin="${dur}s" dur=".6s" fill="freeze"/><animate attributeName="opacity" values=".9;0" begin="${dur}s" dur=".6s" fill="freeze"/></circle>`}
         over+=`<circle class="f-land ${HITS.includes(last.code)?'hit':''}" cx="${bp.x.toFixed(1)}" cy="${bp.y.toFixed(1)}" r="5" ${mv?`opacity="0"><animate attributeName="opacity" from="0" to="1" begin="${dur}s" dur=".15s" fill="freeze"/></circle>`:'/>'}`}}
-    if(last&&last.runs&&fxBan&&!RM())over+=`<text class="f-plus" x="${HX}" y="${HY-14}" text-anchor="middle">+${last.runs}<animateTransform attributeName="transform" type="translate" from="0 0" to="0 -46" dur="1.6s" fill="freeze"/><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.7;1" dur="1.6s" fill="freeze"/></text>`;
+    if(last&&(last.runsAll||last.runs)&&fxBan&&!RM())over+=`<text class="f-plus" x="${HX}" y="${HY-14}" text-anchor="middle">+${last.runsAll||last.runs}<animateTransform attributeName="transform" type="translate" from="0 0" to="0 -46" dur="1.6s" fill="freeze"/><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.7;1" dur="1.6s" fill="freeze"/></text>`;
     const isPR=r=>r.us?S.hist.some(h=>{const l=h[h.length-1];return l&&l.kind==='代走'&&l.pid===r.pid}):(S.oppL[r.slot]||{}).sub==='代走';
     const nm=i=>S.bases[i]?S.rname(S.bases[i]):'';const nmL=i=>S.bases[i]?surname(S.rname(S.bases[i]))+(isPR(S.bases[i])?'・代走':''):'';
     const bk=S.bases.map(r=>r?(r.us?'u'+r.pid:'o'+r.slot):'-').join('|');const prevB=lastBasesK.split('|');const chg=lastBasesK!==''&&bk!==lastBasesK&&!RM();lastBasesK=bk;const curB=bk.split('|');
@@ -1004,7 +1038,7 @@ function fieldSvg(g,S,tap){
       ${nw?`<circle class="f-bring" cx="${x}" cy="${y}" r="8"><animate attributeName="r" from="8" to="20" dur=".7s" fill="freeze"/><animate attributeName="opacity" values="1;0" dur=".7s" fill="freeze"/></circle>`:''}<rect class="f-base ${on?'on':''} ${nw?'newb':''}" x="${x-(on?8:4)}" y="${y-(on?8:4)}" width="${on?16:8}" height="${on?16:8}" transform="rotate(45 ${x} ${y})"/>
       ${on?`<text class="f-rn" x="${x+(i===0?0:i===2?0:0)}" y="${i===1?y-14:y+24}" text-anchor="middle">${esc(nmL(i))}</text>`:''}</g>`}).join('');
   }
-  const fk=[g.id,fieldMode,tap,editing(),S.bases.map(r=>r?S.rname(r)+(r.us?(S.hist.some(h=>{const l=h[h.length-1];return l&&l.kind==='代走'&&l.pid===r.pid})?'*':''):((S.oppL[r.slot]||{}).sub||'')):'').join(','),S.bases.map(r=>r?(r.us?r.pid:'o'+r.slot):'-').join(','),(S.log.filter(l=>l.kind==='pa').slice(-1)[0]||{}).ei,JSON.stringify(S.lineup),S.usP].join('|');
+  const fk=[g.id,fieldMode,tap,editing(),S.bases.map(r=>r?S.rname(r)+(r.us?(S.hist.some(h=>{const l=h[h.length-1];return l&&l.kind==='代走'&&l.pid===r.pid})?'*':''):((S.oppL[r.slot]||{}).sub||'')):'').join(','),S.bases.map(r=>r?(r.us?r.pid:'o'+r.slot):'-').join(','),(S.log.filter(l=>l.kind==='pa').slice(-1)[0]||{}).ei,(S.log.filter(l=>l.kind==='pa').slice(-1)[0]||{}).runsAll,(S.log.filter(l=>l.kind==='pa').slice(-1)[0]||{}).rbi,(g.events||[]).length,JSON.stringify(S.lineup),S.usP].join('|');
   return `<svg class="field" data-k="${esc(fk)}" viewBox="${fieldMode==='pos'?'0 0 300 258':'0 -38 300 296'}" role="img" aria-label="${fieldMode==='pos'?'守備位置':'走者と打球'}">${ground}${over}</svg>`;
 }
 function lamps(n,max,c,prev){let s='';for(let i=0;i<max;i++)s+=`<span class="lamp ${c} ${i<n?'on':''} ${prev!=null&&i<n&&i>=prev?'pulse':''}"></span>`;return s}
@@ -1049,7 +1083,7 @@ function renderLive(g,S){
     const lp=S.log.filter(l=>l.kind==='pa').at(-1);
     const advP=S.since===0&&lp&&S.bases.some(Boolean)&&!['K','BB','HBP'].includes(lp.code)?`<div class="advp"><div class="advh">いまの打球の間に走者はどこまで？<span class="small muted">（次の球を入れると消えます）</span></div>${[2,1,0].filter(i=>S.bases[i]).map(i=>{const nm=surname(S.rname(S.bases[i]));
       const tg=[...[i+1,i+2].filter(t=>t<3).map(t=>[t,BASEN[t]+'へ']),[3,'生還']];
-      return `<div class="advr"><span class="advn">${BASEN[i]} ${esc(nm)}</span>${tg.map(([t,l])=>`<button class="chip ${t===3?'home':''}" data-act="advgo" data-base="${i}" data-to="${t}">${l}</button>`).join('')}<button class="chip out" data-act="advout" data-base="${i}">アウト</button></div>`}).join('')}</div>`:'';
+      return `<div class="advr"><span class="advn">${BASEN[i]} ${esc(nm)}</span>${tg.map(([t,l])=>`<button class="chip ${t===3?'home':''}" data-act="advgo" data-base="${i}" data-to="${t}">${l}</button>`).join('')}<button class="chip err" data-act="adverr" data-base="${i}">エラーで生還</button><button class="chip out" data-act="advout" data-base="${i}">アウト</button></div>`}).join('')}</div>`:'';
     sit=ed?`<div class="card pad stack" id="livecard">${cnt}${seqRow}${advP}${mu}${field}${head}</div>`:`<div class="card pad stack">${head}${seq}${mu}${field}</div>`;
   }
   const preCard=!started?preGameCard(g,S):'';
@@ -1095,7 +1129,7 @@ function abLines(items,e,ed){
   let n=0;const out=[];
   items.forEach((it,i)=>{
     if(it.ev){out.push(`<li class="evl ${it.kind==='pk'?'pkl':''}">${it.kind==='pk'?'<span class="pkic">牽</span>':''}${esc(it.ev)}${it.runs?` <span class="run">${it.runs}点（${it.score[0]}-${it.score[1]}）</span>${erChips(it.er)}`:''}${ed&&it.ei!=null?`<button class="evfix" data-act="fix" data-v="${it.ei}" aria-label="この記録を訂正・削除">訂正</button>`:''}</li>`);return}
-    n++;const last=e&&i===items.length-1||(e&&e.auto&&i===items.map(x=>!!x.p).lastIndexOf(true));
+    n++;const last=e&&i===items.map(x=>!!x.p).lastIndexOf(true);
     const tp=it.pt?PTN[it.pt]+' ':'';let d=it.pt?tp+(PD2[it.p]||''):(PD[it.p]||'');let cnt=it.cnt||'';
     if(e&&last){
       const outs=['K','GO','FO','LO','DP','SAC','SF','FCO'].includes(e.code)||(e.code==='FC'&&e.outsAfter)?` ${e.outsAfter}アウト`:'';
@@ -1114,7 +1148,7 @@ function abItem(e,num,S,opened){
   const ed=editing();
   if(e.kind==='tail'){const lines=abLines(e.ab.items,null,ed);return `<li class="abx tail"><ol class="plines">${lines.join('')}</ol></li>`}
   const key=String(e.ei);const isOpen=abAll!==null?abAll:(abOpen.has(key)||(opened&&!abOpen.has('x'+key)));
-  const lines=abLines(e.ab?e.ab.items:[],e,ed);const lastLine=lines.length?lines[lines.length-1]:`<li>${esc(e.text)}</li>`;
+  const lines=abLines(e.ab?e.ab.items:[],e,ed);const ll=lines.filter(l=>l.startsWith('<li class="lastl"'));const lastLine=ll.length?ll[ll.length-1]:lines.length?lines[lines.length-1]:`<li>${esc(e.text)}</li>`;
   const om=!e.us&&String(e.who).match(/（#(.+)）/);const name=e.us?`${e.slot+1}番：${esc(e.who)}`:`${e.slot+1}番：${om?'相手 #'+esc(om[1]):'相手'}`;
   return `<li class="abx"><details data-ab="${key}" ${isOpen?'open':''}><summary><span class="abn num">${num}</span><span class="abh">${name}　<span class="muted">${sitText(e.ab&&e.ab.pre)}</span>${e.ab&&e.ab.pk?`<span class="pkbadge">牽制${e.ab.pk}</span>`:''}</span>${ed?`<button class="x abfix" data-act="fix" data-v="${e.ei}">訂正</button>`:''}<span class="chev" aria-hidden="true"></span></summary>
     <ol class="plines">${lines.join('')}</ol></details><ol class="plines collapsed-last">${lastLine}</ol></li>`;
@@ -1823,7 +1857,8 @@ document.addEventListener('click',ev=>{
     case'tab':tab=v;sheet=null;render();window.scrollTo(0,0);break;
     case'p':{push(Object.assign({t:'p',k:v},pmeta()));if(v==='S'||v==='W'){const g2=cur();const S2=replay(g2);const lp=S2.log.filter(l=>l.kind==='pa').at(-1);if(lp&&lp.code==='K'&&lp.ei===g2.events.length-1)toastAct(v==='W'?'空振り三振':'見逃し三振','振り逃げにする',()=>{sheet={type:'kr',conv:true};render()})}break}
     case'advgo':{const i=+el.dataset.base,t=+el.dataset.to;const S2=replay(g);if(!S2.bases[i])break;if(t<3&&S2.bases[t]){toast(`${BASEN[t]}に走者がいます。先に前の走者を動かしてください`);break}push({t:'run',base:i,to:String(t),why:'adv'});break}
-    case'advout':{push({t:'run',base:+el.dataset.base,to:'out',why:'PO'});toast('走塁死を記録しました');break}
+    case'adverr':{push({t:'run',base:+el.dataset.base,to:'3',why:'E'});toast('エラーで生還を記録しました（打点なし・非自責点）');break}
+    case'advout':{push({t:'run',base:+el.dataset.base,to:'out',why:'TO'});toast('走塁死を記録しました');break}
     case'raopen':{const S2=replay(g);sheet={type:'rearr',rows:S2.lineup.map((x,i)=>({slot:i,pid:x.pid,pos:x.pos})),focus:v!=null?+v:null};render();break}
     case'rareset':sheet.rows=null;render();break;
     case'rasave':{const S2=replay(g);const ch=sheet.rows.filter((r,i)=>r.pid!==S2.lineup[i].pid||r.pos!==S2.lineup[i].pos).map(r=>{const o={slot:r.slot,pos:r.pos};if(r.pid!==S2.lineup[r.slot].pid){o.pid=r.pid;addPlayer(g,r.pid)}return o});
