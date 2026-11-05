@@ -519,8 +519,13 @@ body.rep{background:#fff}
 .res5{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
 .res5 .rb{min-height:42px;padding:6px 1px;font-size:13.5px;letter-spacing:-.03em}
 .res5 .rb.sm{font-size:11.5px}
-.acts5{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
-.acts5 .ab{min-height:36px;padding:4px 1px;font-size:12px}
+.acts5{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}
+.acts5 .ab{min-height:36px;padding:4px 0;font-size:11.5px;letter-spacing:-.04em;white-space:nowrap}
+.ztog{flex:none;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;font-weight:800;padding:8px 10px;font-size:14px;white-space:nowrap}
+.ztog[aria-pressed="true"]{background:var(--board);color:#fff;border-color:var(--board)}
+.czone svg{display:block;max-height:168px;width:auto;margin:0 auto}
+.czone p{display:none}
+.compact .ptrow .ptseg button{font-size:14px;padding-left:4px;padding-right:4px}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -884,7 +889,7 @@ function renderBody(g,S){
   if(noDb)return `<div class="card empty"><h3>初期設定がまだです</h3><p class="muted">firebase-config.js に Firebase の設定を書き込むと、速報が使えるようになります。</p></div>`;
   if(!booted)return `<div class="card empty"><p class="muted">試合データを読み込んでいます…</p></div>`;
   let modebar='';
-  const posBtn=tab==='live'&&g&&!S?.ended&&g.lineup&&g.lineup.length?`<span class="row" style="gap:6px;flex-wrap:nowrap"><button class="chip mini" aria-pressed="${fieldMode==='pos'}" data-act="fmode" data-v="${fieldMode==='pos'?'runner':'pos'}">守備位置</button><button class="chip mini" aria-pressed="${fieldMode==='zone'}" data-act="fmode" data-v="${fieldMode==='zone'?'runner':'zone'}">投球コース</button></span>`:'';
+  const posBtn=tab==='live'&&g&&!S?.ended&&g.lineup&&g.lineup.length&&!editing()?`<span class="row" style="gap:6px;flex-wrap:nowrap"><button class="chip mini" aria-pressed="${fieldMode==='pos'}" data-act="fmode" data-v="${fieldMode==='pos'?'runner':'pos'}">守備位置</button><button class="chip mini" aria-pressed="${fieldMode==='zone'}" data-act="fmode" data-v="${fieldMode==='zone'?'runner':'zone'}">投球コース</button></span>`:'';
   if(isScorer())modebar=`<div class="modebar"><span class="small muted">${scorer?'記録係モード':'閲覧モード'}　${syncLabel()}</span><div class="row" style="gap:10px;flex-wrap:nowrap">${posBtn}<label class="switch"><input type="checkbox" id="scorerSw" data-act="scorer" ${scorer?'checked':''}> 記録する</label></div></div>`;
   else if(posBtn)modebar=`<div class="modebar"><span></span>${posBtn}</div>`;
   let main;
@@ -1108,7 +1113,9 @@ function renderLive(g,S){
     const advP=S.since===0&&lp&&S.bases.some(Boolean)&&!['K','BB','HBP'].includes(lp.code)?`<div class="advp"><div class="advh">いまの打球の間に走者はどこまで？<span class="small muted">（次の球を入れると消えます）</span></div>${[2,1,0].filter(i=>S.bases[i]).map(i=>{const nm=surname(S.rname(S.bases[i]));
       const tg=[...[i+1,i+2].filter(t=>t<3).map(t=>[t,BASEN[t]+'へ']),[3,'生還']];
       return `<div class="advr"><span class="advn">${BASEN[i]} ${esc(nm)}</span>${tg.map(([t,l])=>`<button class="chip ${t===3?'home':''}" data-act="advgo" data-base="${i}" data-to="${t}">${l}</button>`).join('')}<button class="chip err" data-act="adverr" data-base="${i}">エラーで生還</button><button class="chip out" data-act="advout" data-base="${i}">アウト</button></div>`}).join('')}</div>`:'';
-    sit=ed?`<div class="card pad stack compact" id="livecard">${infoRow(g,S,B,pk,P,isPH)}${cnt}${seqRow}${advP}${compactPanel(g,S)}</div><div class="card pad stack">${field}${mu}${head}</div>`:`<div class="card pad stack">${head}${seq}${mu}${field}</div>`;
+    let czone='',field2='';if(ed){if(fieldMode==='zone')czone=`<div class="czone">${zoneSvg(g,S)}</div>`;const fm=fieldMode;fieldMode='runner';field2=`<div class="fieldwrap ed">${fieldSvg(g,S,true)}</div>`;fieldMode=fm}
+    const cntC=ed?cnt.replace('<button class="pkbtn"',`<button class="ztog" aria-pressed="${fieldMode==='zone'}" data-act="fmode" data-v="${fieldMode==='zone'?'runner':'zone'}">コース</button><button class="pkbtn"`):cnt;
+    sit=ed?`<div class="card pad stack compact" id="livecard">${infoRow(g,S,B,pk,P,isPH)}${czone}${cntC}${seqRow}${advP}${compactPanel(g,S)}</div><div class="card pad stack">${field2}${mu}${head}</div>`:`<div class="card pad stack">${head}${seq}${mu}${field}</div>`;
   }
   const preCard=!started?preGameCard(g,S):'';
   const panel=editing()&&!S.ended?'':(editing()&&S.ended?`<div class="card pad row"><span class="muted small" style="flex:1">試合終了の記録を取り消すと再開できます。</span><button class="btn ghost" data-act="undo">取り消し</button></div>`:'');
@@ -1239,7 +1246,7 @@ function compactPanel(g,S){
     <div class="res5">${R('1B','安打','hit')}${R('2B','二塁打','hit')}${R('3B','三塁打','hit')}${R('HR','本塁打','hit')}${R('IH','内野安打','hit')}</div>
     <div class="res5">${R('OUT',ttSel?{G:'ゴロアウト',L:'ライナー',F:'フライアウト'}[ttSel]:'アウト','outb')}${R('DP','併殺')}${R('SAC','犠打')}${R('SF','犠飛')}${R('E','失策')}</div>
     <div class="res5">${R('HBP','死球')}${R('FC','野選')}${R('FCO','ゲッツー崩れ','sm')}${R('KR','振り逃げ')}${R('IBB','申告敬遠','sm')}</div>
-    <div class="acts5"><button class="ab" data-act="pa" data-v="K">三振</button><button class="ab" data-act="timeopen">タイム</button><button class="ab" data-act="osubopen" data-v="${fieldingUs?'代打':'守備'}">相手交代</button><button class="ab" data-act="undo">取り消し</button><button class="ab danger" data-act="open" data-v="end">試合終了</button></div>
+    <div class="acts5"><button class="ab" data-act="pa" data-v="K">三振</button><button class="ab" data-act="timeopen">タイム</button><button class="ab" data-act="posopen">守備交代</button><button class="ab" data-act="osubopen" data-v="${fieldingUs?'代打':'守備'}">相手交代</button><button class="ab" data-act="undo">取り消し</button><button class="ab danger" data-act="open" data-v="end">試合終了</button></div>
   </div>`}
 
 function inputPanel(g,S){
@@ -1760,6 +1767,10 @@ function renderSheet(g,S){
   }else if(sheet.type==='pr'){
     const r=S.bases[sheet.base];const slot=r?S.lineup.findIndex(x=>x.pid===r.pid):-1;
     body=`<h3>代走　${r?esc(S.rname(r)):''} に代えて</h3>${pickList(benchOf(g,S),'dosub',`data-slot="${slot}" data-kind="代走"`)}`;
+  }else if(sheet.type==='posfield'){
+    const fm=fieldMode;fieldMode='pos';const svg=fieldSvg(g,S,false);fieldMode=fm;
+    body=`<h3>守備位置・選手交代</h3><p class="small muted" style="margin:0">選手をタップすると、その選手の交代・守備位置の変更ができます。</p><div class="fieldwrap ed">${svg}</div>
+    <button class="btn pr" data-act="raopen">守備をまとめて組み替える（ベンチへ下げる・複数人）</button>`;
   }else if(sheet.type==='rearr'){
     if(!sheet.rows)sheet.rows=S.lineup.map((x,i)=>({slot:i,pid:x.pid,pos:x.pos}));
     const bench=benchOf(g,S);const P9=['投','捕','一','二','三','遊','左','中','右','指'];
@@ -1907,6 +1918,7 @@ document.addEventListener('click',ev=>{
     case'advgo':{const i=+el.dataset.base,t=+el.dataset.to;const S2=replay(g);if(!S2.bases[i])break;if(t<3&&S2.bases[t]){toast(`${BASEN[t]}に走者がいます。先に前の走者を動かしてください`);break}push({t:'run',base:i,to:String(t),why:'adv'});break}
     case'adverr':{push({t:'run',base:+el.dataset.base,to:'3',why:'E'});toast('エラーで生還を記録しました（打点なし・非自責点）');break}
     case'advout':{push({t:'run',base:+el.dataset.base,to:'out',why:'TO'});toast('走塁死を記録しました');break}
+    case'posopen':sheet={type:'posfield'};render();break;
     case'raopen':{const S2=replay(g);sheet={type:'rearr',rows:S2.lineup.map((x,i)=>({slot:i,pid:x.pid,pos:x.pos})),focus:v!=null?+v:null};render();break}
     case'rareset':sheet.rows=null;render();break;
     case'rasave':{const S2=replay(g);const ch=sheet.rows.filter((r,i)=>r.pid!==S2.lineup[i].pid||r.pos!==S2.lineup[i].pos).map(r=>{const o={slot:r.slot,pos:r.pos};if(r.pid!==S2.lineup[r.slot].pid){o.pid=r.pid;addPlayer(g,r.pid)}return o});
